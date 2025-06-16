@@ -142,7 +142,7 @@ def runDenseOffsetsGPU(self):
     Estimate dense offset field between merged reference bursts and secondary bursts.
     '''
 
-    from contrib.PyCuAmpcor import PyCuAmpcor
+    from pycuampcor import PyCuAmpcor
 
     print('\n============================================================')
     print('Configuring PyCuAmpcor object for processing...\n')
@@ -186,7 +186,7 @@ def runDenseOffsetsGPU(self):
     length = m.getLength()
 
     ### create the GPU processor
-    objOffset = PyCuAmpcor.PyCuAmpcor()
+    objOffset = PyCuAmpcor()
 
     ### Set parameters
     # cross-correlation method, 0=Frequency domain, 1= Time domain

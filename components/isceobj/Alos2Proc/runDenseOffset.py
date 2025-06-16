@@ -199,7 +199,7 @@ def runDenseOffsetGPU(self):
     '''
     Estimate dense offset field between a pair of SLCs.
     '''
-    from contrib.PyCuAmpcor import PyCuAmpcor
+    from pycuampcor import PyCuAmpcor
     from isceobj.Alos2Proc.Alos2ProcPublic import runCmd
     from isceobj.Alos2Proc.Alos2ProcPublic import create_xml
 
@@ -242,7 +242,7 @@ def runDenseOffsetGPU(self):
     print('dense offset covariance surface oversample factor: %d' % (self.offsetCovarianceOversamplingFactor))
 
 
-    objOffset = PyCuAmpcor.PyCuAmpcor()
+    objOffset = PyCuAmpcor()
     objOffset.algorithm = 0
     objOffset.derampMethod = 1 # 1=linear phase ramp, 0=take mag, 2=skip
     objOffset.referenceImageName = self._insar.referenceSlc
