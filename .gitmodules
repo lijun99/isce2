@@ -1,0 +1,3 @@
+[submodule "contrib/PyCuAmpcor"]
+	path = contrib/PyCuAmpcor
+	url = https://github.com/lijun99/cuAmpcor.git
