@@ -75,7 +75,7 @@ if 'MOTIFLIBPATH' in envcontrib.Dictionary():
 rfi = os.path.join('rfi', 'SConscript')
 SConscript(rfi)
 
-SConscript('PyCuAmpcor/SConscript')
+SConscript('pycuampcor/SConscript')
 SConscript('splitSpectrum/SConscript')
 SConscript('alos2filter/SConscript')
 SConscript('alos2proc/SConscript')

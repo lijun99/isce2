@@ -199,7 +199,7 @@ def runDenseOffsetGPU(self):
     '''
     Estimate dense offset field between a pair of SLCs.
     '''
-    from pycuampcor import PyCuAmpcor
+    from contrib.pycuampcor import PyCuAmpcor
     from isceobj.Alos2Proc.Alos2ProcPublic import runCmd
     from isceobj.Alos2Proc.Alos2ProcPublic import create_xml
 
