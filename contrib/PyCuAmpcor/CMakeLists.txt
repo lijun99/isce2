@@ -32,6 +32,11 @@ pybind11_add_module(PyCuAmpcor
     src/cudaError.cpp
     src/cudaUtil.cpp
     )
+
+# Set the C++17 standard specifically for the CUDA code
+set_property(TARGET PyCuAmpcor PROPERTY CUDA_STANDARD 17)
+set_property(TARGET PyCuAmpcor PROPERTY CUDA_STANDARD_REQUIRED ON)
+
 target_include_directories(PyCuAmpcor PRIVATE
     src
     )

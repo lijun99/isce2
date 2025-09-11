@@ -41,11 +41,13 @@ void gpuDeviceList()
 
     while (current_device < device_count) {
         checkCudaErrors(cudaGetDeviceProperties(&deviceProp, current_device));
-        if (deviceProp.computeMode == cudaComputeModeProhibited) {
+        // CUDA 13 dropped API support for compute modes
+        /* if (deviceProp.computeMode == cudaComputeModeProhibited) {
             fprintf(stderr, "CUDA Device [%d]: \"%s\" is not available: "
                     "device is running in <Compute Mode Prohibited> \n",
                     current_device, deviceProp.name);
-        } else if (deviceProp.major < 1) {
+        */
+        if (deviceProp.major < 1) {
             fprintf(stderr, "CUDA Device [%d]: \"%s\" is not available: "
                     "device does not support CUDA \n",
                     current_device, deviceProp.name);
