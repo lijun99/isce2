@@ -52,7 +52,7 @@ def generate(env):
     # default flags for the NVCC compiler
     env['STATICNVCCFLAGS'] = ''
     env['SHAREDNVCCFLAGS'] = ''
-    env['ENABLESHAREDNVCCFLAG'] = '-std=c++11 -shared -Xcompiler -fPIC'
+    env['ENABLESHAREDNVCCFLAG'] = '-std=c++17 -shared -Xcompiler -fPIC'
 
     # default NVCC commands
     env['STATICNVCCCMD'] = '$NVCC -o $TARGET -c $NVCCFLAGS $STATICNVCCFLAGS $SOURCES'

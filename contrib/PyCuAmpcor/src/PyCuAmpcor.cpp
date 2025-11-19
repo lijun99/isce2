@@ -3,6 +3,7 @@
 
 #include "cuAmpcorController.h"
 #include "cuAmpcorParameter.h"
+#include "cudaUtil.h"
 
 PYBIND11_MODULE(PyCuAmpcor, m)
 {
@@ -99,5 +100,20 @@ PYBIND11_MODULE(PyCuAmpcor, m)
                     self.param->referenceStartPixelAcross0,
                     vD.data(), vA.data());
         })
-        ;
+
+        .def_static("device_init", [](int device = 0) {
+            return gpuDeviceInit(device);
+        },
+        "Init the given cuda device (default = 0)")
+
+        .def_static("get_sm_count", [](int device = 0) {
+            return getSMCount(device);
+        },
+        "Returns the number of SMs (streaming multiprocessors) on the given device.")
+
+        .def_static("device_list", []() {
+            return gpuDeviceList();
+        },
+        "List all available cuda devices")
+    ;
 }

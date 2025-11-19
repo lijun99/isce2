@@ -26,33 +26,39 @@ int gpuDeviceInit(int devID)
     return devID;
 }
 
-void gpuDeviceList()
+int gpuDeviceList()
 {
-    int device_count = 0;
-    int current_device = 0;
-    cudaDeviceProp deviceProp;
-    checkCudaErrors(cudaGetDeviceCount(&device_count));
+    int deviceCount = 0;
+    checkCudaErrors(cudaGetDeviceCount(&deviceCount));
 
-    fprintf(stderr, "Detecting all CUDA devices ...\n");
-    if (device_count == 0) {
+    if (deviceCount == 0) {
         fprintf(stderr, "CUDA error: no devices supporting CUDA.\n");
-        exit(EXIT_FAILURE);
     }
+    else {
+        fprintf(stderr, "Detected %d CUDA capable device%s:\n",
+                deviceCount, (deviceCount == 1 ? "" : "s"));
+        fprintf(stderr, " GPU  Name                                    SM Ver  #SMs\n");
 
-    while (current_device < device_count) {
-        checkCudaErrors(cudaGetDeviceProperties(&deviceProp, current_device));
-        if (deviceProp.computeMode == cudaComputeModeProhibited) {
-            fprintf(stderr, "CUDA Device [%d]: \"%s\" is not available: "
-                    "device is running in <Compute Mode Prohibited> \n",
-                    current_device, deviceProp.name);
-        } else if (deviceProp.major < 1) {
-            fprintf(stderr, "CUDA Device [%d]: \"%s\" is not available: "
-                    "device does not support CUDA \n",
-                    current_device, deviceProp.name);
-        } else {
-            fprintf(stderr, "CUDA Device [%d]: \"%s\" is available.\n",
-                    current_device, deviceProp.name);
+        for (int dev = 0; dev < deviceCount; ++dev) {
+            cudaDeviceProp prop {};
+            checkCudaErrors(cudaGetDeviceProperties(&prop, dev));
+
+            fprintf(stderr, " %3d  %-36s  sm_%d%d  %4d\n",
+                dev, prop.name, prop.major, prop.minor, prop.multiProcessorCount);
         }
-        current_device++;
     }
+    return deviceCount;
+}
+
+int getSMCount(int devID)
+{
+    // Get the ID of the currently active CUDA device
+    checkCudaErrors(cudaGetDevice(&devID));
+
+    // Retrieve device properties
+    cudaDeviceProp prop;
+    checkCudaErrors(cudaGetDeviceProperties(&prop, devID));
+
+    // Return the SM (Streaming Multiprocessor) count
+    return prop.multiProcessorCount;
 }
