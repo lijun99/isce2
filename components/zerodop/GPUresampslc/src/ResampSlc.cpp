@@ -486,7 +486,7 @@ void ResampSlc::_resamp_gpu()
     for (int i=0; i<inLength; i++) {
         slcInAccObj->getLineSequential((char *)&imgIn[i*inWidth]);
     }
-    // read the residAz if providied
+    // read the residAz if provided
     if (residAzAccessor != 0) {
         for (int i=0; i<outLength; i++)
             residAzAccObj->getLineSequential((char *)&residAz[i*outWidth]);

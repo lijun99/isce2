@@ -9,6 +9,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <sys/time.h>
+#include <stdlib.h>
 
 #define SINC_SUB 8192
 #define SINC_LEN 8
@@ -100,8 +101,8 @@ __global__ void removeCarrier(struct InputData inData) {
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 
 // Data Usage: 15 pointers/floats, 5 ints, 1 bool      --      144 bytes/call (assuming 1 bool ==> 1 int)
-//             Add call to sinfc_interp (100 bytes/call) --      244 bytes/call (for funsies let's assume ~250 bytes/call)
-// NOTE: We ignore calls to evalPolyAt sinfce they have less
+//             Add call to sinc_interp (100 bytes/call) --      244 bytes/call (for funsies let's assume ~250 bytes/call)
+// NOTE: We ignore calls to evalPolyAt since they have less
 //       data usage and therefore do not really matter for
 //       max data usage
 __global__ void GPUResamp(struct InputData inData) {
@@ -194,14 +195,16 @@ double cpuSecond() {
     return (double(tp.tv_sec) + double(tp.tv_usec)*1.e-6);
 }
 
-void checkKernelErrors() {
-
-    cudaError_t errSync = cudaGetLastError();
-    cudaError_t errAsync = cudaDeviceSynchronize();
-
-    if (errSync != cudaSuccess) printf("\nSync kernel error: %s\n", cudaGetErrorString(errSync));
-    if (errAsync != cudaSuccess) printf("\nAsync kernel error: %s\n", cudaGetErrorString(errAsync));
+static inline void checkCudaErrors(cudaError_t err, const char *call, const char *file, int line) {
+    if (err != cudaSuccess) {
+        fprintf(stderr, "\nCUDA error at %s:%d after %s: %s\n", file, line, call, cudaGetErrorString(err));
+        fflush(stderr);
+        exit(EXIT_FAILURE);
+    }
 }
+
+#define CHECK_CUDA(call) checkCudaErrors((call), #call, __FILE__, __LINE__)
+
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
 //              Main CPU Function
@@ -248,14 +251,14 @@ void runGPUResamp(double *h_inpts_dbl, int *h_inpts_int, void *imgIn, void *imgO
 
 
     printf("\n  Initializing GPU ResampSlc\n");
-    cudaSetDevice(0);
+    // CHECK_CUDA(cudaSetDevice(0));
 
     startRun = cpuSecond();
 
     printf("    Allocating initial memory... ");
     fflush(stdout);
 
-    int nInPix = h_inpts_int[5] * h_inpts_int[1];
+    int nInPix = h_inpts_int[0] * h_inpts_int[1];
     int nOutPix = h_inpts_int[6] * h_inpts_int[2];
     int nResidAzPix = 0;
     if (residAz != 0) nResidAzPix = h_inpts_int[6] * h_inpts_int[2];
@@ -277,36 +280,37 @@ void runGPUResamp(double *h_inpts_dbl, int *h_inpts_int, void *imgIn, void *imgO
     size_t nb_azCarry = nAzCarryPix * sizeof(double);
     size_t nb_rgCarry = nRgCarryPix * sizeof(double);
 
-    cudaMalloc((cuFloatComplex**)&d_imgIn, nb_in);
-    cudaMalloc((cuFloatComplex**)&d_imgOut, nb_out);
-    if (residAz != 0) cudaMalloc((float**)&d_residAz, nb_rsdAz);
-    if (residRg != 0) cudaMalloc((float**)&d_residRg, nb_rsdRg);
-    cudaMalloc((double**)&d_azOffPoly, nb_azOff);
-    cudaMalloc((double**)&d_rgOffPoly, nb_rgOff);
-    cudaMalloc((double**)&d_dopPoly, nb_dop);
-    cudaMalloc((double**)&d_azCarrierPoly, nb_azCarry);
-    cudaMalloc((double**)&d_rgCarrierPoly, nb_rgCarry);
-    cudaMalloc((float**)&d_fintp, (SINC_LEN*SINC_SUB*sizeof(float)));
+    CHECK_CUDA(cudaMalloc((cuFloatComplex**)&d_imgIn, nb_in));
+    CHECK_CUDA(cudaMalloc((cuFloatComplex**)&d_imgOut, nb_out));
+    if (residAz != 0) CHECK_CUDA(cudaMalloc((float**)&d_residAz, nb_rsdAz));
+    if (residRg != 0) CHECK_CUDA(cudaMalloc((float**)&d_residRg, nb_rsdRg));
+    CHECK_CUDA(cudaMalloc((double**)&d_azOffPoly, nb_azOff));
+    CHECK_CUDA(cudaMalloc((double**)&d_rgOffPoly, nb_rgOff));
+    CHECK_CUDA(cudaMalloc((double**)&d_dopPoly, nb_dop));
+    CHECK_CUDA(cudaMalloc((double**)&d_azCarrierPoly, nb_azCarry));
+    CHECK_CUDA(cudaMalloc((double**)&d_rgCarrierPoly, nb_rgCarry));
+    CHECK_CUDA(cudaMalloc((float**)&d_fintp, (SINC_LEN*SINC_SUB*sizeof(float))));
 
     printf("Done.\n    Copying data to GPU... ");
     fflush(stdout);
 
     startKernel = cpuSecond();
 
-    cudaMemcpy(d_imgIn, h_imgIn, nb_in, cudaMemcpyHostToDevice);
-    if (residAz != 0) cudaMemcpy(d_residAz, residAz, nb_rsdAz, cudaMemcpyHostToDevice);
-    if (residRg != 0) cudaMemcpy(d_residRg, residRg, nb_rsdRg, cudaMemcpyHostToDevice);
-    cudaMemcpy(d_azOffPoly, azOffPoly, nb_azOff, cudaMemcpyHostToDevice);
-    cudaMemcpy(d_rgOffPoly, rgOffPoly, nb_rgOff, cudaMemcpyHostToDevice);
-    cudaMemcpy(d_dopPoly, dopPoly, nb_dop, cudaMemcpyHostToDevice);
-    cudaMemcpy(d_azCarrierPoly, azCarrierPoly, nb_azCarry, cudaMemcpyHostToDevice);
-    cudaMemcpy(d_rgCarrierPoly, rgCarrierPoly, nb_rgCarry, cudaMemcpyHostToDevice);
-    cudaMemcpy(d_fintp, fintp, (SINC_LEN*SINC_SUB*sizeof(float)), cudaMemcpyHostToDevice);
 
-    cudaMemcpyToSymbol(ind, h_inpts_dbl, (6*sizeof(double)));
-    cudaMemcpyToSymbol(ini, h_inpts_int, (8*sizeof(int)));
+    CHECK_CUDA(cudaMemcpy(d_imgIn, h_imgIn, nb_in, cudaMemcpyHostToDevice));
+    if (residAz != 0) CHECK_CUDA(cudaMemcpy(d_residAz, residAz, nb_rsdAz, cudaMemcpyHostToDevice));
+    if (residRg != 0) CHECK_CUDA(cudaMemcpy(d_residRg, residRg, nb_rsdRg, cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaMemcpy(d_azOffPoly, azOffPoly, nb_azOff, cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaMemcpy(d_rgOffPoly, rgOffPoly, nb_rgOff, cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaMemcpy(d_dopPoly, dopPoly, nb_dop, cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaMemcpy(d_azCarrierPoly, azCarrierPoly, nb_azCarry, cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaMemcpy(d_rgCarrierPoly, rgCarrierPoly, nb_rgCarry, cudaMemcpyHostToDevice));
+    CHECK_CUDA(cudaMemcpy(d_fintp, fintp, (SINC_LEN*SINC_SUB*sizeof(float)), cudaMemcpyHostToDevice));
 
-    cudaMemset(d_imgOut, 0, nb_out);
+    CHECK_CUDA(cudaMemcpyToSymbol(ind, h_inpts_dbl, (6*sizeof(double))));
+    CHECK_CUDA(cudaMemcpyToSymbol(ini, h_inpts_int, (8*sizeof(int))));
+
+    CHECK_CUDA(cudaMemset(d_imgOut, 0, nb_out));
 
     endKernel = cpuSecond();
 
@@ -335,11 +339,12 @@ void runGPUResamp(double *h_inpts_dbl, int *h_inpts_int, void *imgIn, void *imgO
     int threads = 1024;
     int blocks = (nInPix + threads-1) / threads;
     removeCarrier<<<blocks, threads>>>(inData);
-    checkKernelErrors();
+    CHECK_CUDA(cudaGetLastError());
+
     // resample
     blocks = (nOutPix + threads -1) / threads;
-    GPUResamp <<<blocks, threads>>>(inData);
-    checkKernelErrors();
+    GPUResamp<<<blocks, threads>>>(inData);
+    CHECK_CUDA(cudaGetLastError());
 
     endKernel = cpuSecond();
 
@@ -350,7 +355,7 @@ void runGPUResamp(double *h_inpts_dbl, int *h_inpts_int, void *imgIn, void *imgO
 
     startKernel = cpuSecond();
 
-    cudaMemcpy(h_imgOut, d_imgOut, nb_out, cudaMemcpyDeviceToHost);
+    CHECK_CUDA(cudaMemcpy(h_imgOut, d_imgOut, nb_out, cudaMemcpyDeviceToHost));
 
     endKernel = cpuSecond();
     endRun = cpuSecond();
@@ -359,17 +364,17 @@ void runGPUResamp(double *h_inpts_dbl, int *h_inpts_int, void *imgIn, void *imgO
     printf("    Finished GPU ResampSlc in %f s.\n", (endRun-startRun));
     printf("    Cleaning device memory and returning to main ResampSlc function...\n");
 
-    cudaFree(d_imgIn);
-    cudaFree(d_imgOut);
-    if (residAz != 0) cudaFree(d_residAz);
-    if (residRg != 0) cudaFree(d_residRg);
-    cudaFree(d_azOffPoly);
-    cudaFree(d_rgOffPoly);
-    cudaFree(d_dopPoly);
-    cudaFree(d_azCarrierPoly);
-    cudaFree(d_rgCarrierPoly);
-    cudaFree(d_fintp);
-    cudaDeviceReset();
+    CHECK_CUDA(cudaFree(d_imgIn));
+    CHECK_CUDA(cudaFree(d_imgOut));
+    if (residAz != 0) CHECK_CUDA(cudaFree(d_residAz));
+    if (residRg != 0) CHECK_CUDA(cudaFree(d_residRg));
+    CHECK_CUDA(cudaFree(d_azOffPoly));
+    CHECK_CUDA(cudaFree(d_rgOffPoly));
+    CHECK_CUDA(cudaFree(d_dopPoly));
+    CHECK_CUDA(cudaFree(d_azCarrierPoly));
+    CHECK_CUDA(cudaFree(d_rgCarrierPoly));
+    CHECK_CUDA(cudaFree(d_fintp));
+    CHECK_CUDA(cudaDeviceReset());
 
     printf("  Exiting GPU ResampSlc\n\n");
 }
