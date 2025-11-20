@@ -151,8 +151,8 @@ def resampSecondaryGPU(reference, secondary, rdict, outname):
 
     ####Setting reference values
     rObj.r0 = secondary.startingRange
-    rObj.refr0 = reference.rangePixelSize
-    rObj.refslr = reference.startingRange
+    rObj.refr0 = reference.startingRange
+    rObj.refslr = reference.rangePixelSize
     rObj.refwvl = reference.radarWavelength
 
     # set output image
