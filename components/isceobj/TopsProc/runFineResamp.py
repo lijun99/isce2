@@ -17,7 +17,7 @@ import logging
 
 logger = logging.getLogger('isce.topsinsar.fineresamp')
 
-def resampSecondaryCPU(reference, secondary, rdict, outname):
+def resampSecondaryCPU(reference, secondary, rdict, outname, flatten=True):
     '''
     Resample burst by burst.
     '''
@@ -67,6 +67,7 @@ def resampSecondaryCPU(reference, secondary, rdict, outname):
     rObj.outputLines = length
     rObj.residualRangeImage = rngImg
     rObj.residualAzimuthImage = aziImg
+    rObj.flatten = flatten
 
     rObj.resamp_slc(imageOut=imgOut)
 
@@ -96,7 +97,7 @@ def convertPoly2D(poly):
     # all done
     return pPoly
 
-def resampSecondaryGPU(reference, secondary, rdict, outname):
+def resampSecondaryGPU(reference, secondary, rdict, outname, flatten=True):
     '''
     Resample burst by burst with GPU
     '''
@@ -170,6 +171,7 @@ def resampSecondaryGPU(reference, secondary, rdict, outname):
     rObj.outLength = length
     rObj.residRgAccessor = rngImg.getImagePointer()
     rObj.residAzAccessor = aziImg.getImagePointer()
+    rObj.flatten = flatten
 
     # need to specify data type, only complex is currently supported
     rObj.isComplex = (inimg.dataType == 'CFLOAT')
@@ -389,7 +391,7 @@ def runFineResamp(self):
             rdict['carrPoly'] = azCarrPoly
             rdict['doppPoly'] = dpoly
 
-            outimg = resampSecondary(referenceBurst, secondaryBurst, rdict, outname)
+            outimg = resampSecondary(referenceBurst, secondaryBurst, rdict, outname, flatten=not getattr(self, 'noflat', False))
 
             minAz, maxAz, minRg, maxRg = getValidLines(secondaryBurst, rdict, outname,
                     misreg_az = misreg_az - offset, misreg_rng = misreg_rg)

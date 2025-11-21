@@ -429,6 +429,14 @@ USE_GPU = Application.Parameter(
         mandatory=False,
         doc='Allow App to use GPU when available')
 
+NOFLAT = Application.Parameter(
+        'noflat',
+        public_name='noflat',
+        default=False,
+        type=bool,
+        mandatory=False,
+        doc='Disable flattening phase during fine resampling')
+
 #####################################################################
 #ionospheric correction
 ION_DO_ION = Application.Parameter('ION_doIon',
@@ -676,6 +684,7 @@ class TopsInSAR(Application):
                       FILTER_WIN_SIZE,
                       OFFSET_GEOCODE_LIST,
                       USE_GPU,
+                      NOFLAT,
                       ########################################################
                       #for ionospheric correction
                       ION_DO_ION,
