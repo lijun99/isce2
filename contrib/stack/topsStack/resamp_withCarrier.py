@@ -61,9 +61,6 @@ def main(iargs=None):
     Create coregistered overlap secondarys.
     '''
     inps = cmdLineParse(iargs)
-    referenceSwathList = ut.getSwathList(inps.reference)
-    secondarySwathList = ut.getSwathList(inps.secondary)
-    swathList = list(sorted(set(referenceSwathList + secondarySwathList)))
 
     # decide whether to use GPU
     run_GPU = False
@@ -81,6 +78,10 @@ def main(iargs=None):
     else:
         from isceobj.TopsProc.runFineResamp import resampSecondaryCPU as resampSecondary
         print("Using CPU for fine resampling")
+
+    referenceSwathList = ut.getSwathList(inps.reference)
+    secondarySwathList = ut.getSwathList(inps.secondary)
+    swathList = list(sorted(set(referenceSwathList + secondarySwathList)))
 
     for swath in swathList:
 

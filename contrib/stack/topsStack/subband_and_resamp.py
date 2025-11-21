@@ -37,63 +37,14 @@ def createParser():
     parser.add_argument('--noflat', dest='noflat', action='store_true', default=False,
             help='To turn off flattening. False: flattens the SLC. True: turns off flattening.')
 
+    parser.add_argument('-useGPU', '--useGPU', dest='useGPU',action='store_true', default=False,
+            help='Allow App to use GPU when available')
+
     return parser
 
 def cmdLineParse(iargs = None):
     parser = createParser()
     return parser.parse_args(args=iargs)
-
-def resampSecondary(mas, slv, rdict, outname, flatten):
-    '''
-    Resample burst by burst.
-    '''
-
-    azpoly = rdict['azpoly']
-    rgpoly = rdict['rgpoly']
-    azcarrpoly = rdict['carrPoly']
-    dpoly = rdict['doppPoly']
-
-    rngImg = isceobj.createImage()
-    rngImg.load(rdict['rangeOff'] + '.xml')
-    rngImg.setAccessMode('READ')
-
-    aziImg = isceobj.createImage()
-    aziImg.load(rdict['azimuthOff'] + '.xml')
-    aziImg.setAccessMode('READ')
-
-    inimg = isceobj.createSlcImage()
-    inimg.load(slv.image.filename + '.xml')
-    inimg.setAccessMode('READ')
-
-
-    rObj = stdproc.createResamp_slc()
-    rObj.slantRangePixelSpacing = slv.rangePixelSize
-    rObj.radarWavelength = slv.radarWavelength
-    rObj.azimuthCarrierPoly = azcarrpoly
-    rObj.dopplerPoly = dpoly
-
-    rObj.azimuthOffsetsPoly = azpoly
-    rObj.rangeOffsetsPoly = rgpoly
-    rObj.imageIn = inimg
-
-    width = mas.numberOfSamples
-    length = mas.numberOfLines
-    imgOut = isceobj.createSlcImage()
-    imgOut.setWidth(width)
-    imgOut.filename = outname
-    imgOut.setAccessMode('write')
-
-    rObj.outputWidth = width
-    rObj.outputLines = length
-    rObj.residualRangeImage = rngImg
-    rObj.residualAzimuthImage = aziImg
-    rObj.flatten = flatten
-    print(rObj.flatten)
-    rObj.resamp_slc(imageOut=imgOut)
-
-    imgOut.renderHdr()
-    imgOut.renderVRT()
-    return imgOut
 
 
 def subband(burst, nout, outputfile, bw, bc, rgRef, virtual):
@@ -116,10 +67,10 @@ def subband(burst, nout, outputfile, bw, bc, rgRef, virtual):
     #removing window
     rangeSamplingRate = SPEED_OF_LIGHT / (2.0 * burst.rangePixelSize)
     if burst.rangeWindowType == 'Hamming':
-        removeHammingWindow(burst.image.filename, tmpFilename, burst.rangeProcessingBandwidth, rangeSamplingRate, burst.rangeWindowCoefficient, virtual=virtual)  
+        removeHammingWindow(burst.image.filename, tmpFilename, burst.rangeProcessingBandwidth, rangeSamplingRate, burst.rangeWindowCoefficient, virtual=virtual)
     else:
         raise Exception('Range weight window type: {} is not supported yet!'.format(burst.rangeWindowType))
-    
+
     #subband
     rg_filter(tmpFilename,
               #burst.numberOfSamples,
@@ -144,16 +95,33 @@ def main(iargs=None):
     Create coregistered overlap secondarys.
     '''
     inps = cmdLineParse(iargs)
+
+    # decide whether to use GPU
+    run_GPU = False
+    if inps.useGPU:
+        try:
+            from zerodop.GPUresampslc.GPUresampslc import PyResampSlc
+            run_GPU = True
+        except:
+            print("GPU resampling module not found. Using CPU instead.")
+            pass
+
+    if run_GPU:
+        from isceobj.TopsProc.runFineResamp import resampSecondaryGPU as resampSecondary
+        print("Using GPU for fine resampling")
+    else:
+        from isceobj.TopsProc.runFineResamp import resampSecondaryCPU as resampSecondary
+        print("Using CPU for fine resampling")
+
     referenceSwathList = ut.getSwathList(inps.reference)
     secondarySwathList = ut.getSwathList(inps.secondary)
-
     swathList = list(sorted(set(referenceSwathList+secondarySwathList)))
 
     #if os.path.abspath(inps.reference) == os.path.abspath(inps.secondary):
     #    print('secondary is the same as reference, only performing subband filtering')
 
     for swath in swathList:
-    
+
         ####Load secondary metadata
         reference = ut.loadProduct( os.path.join(inps.reference , 'IW{0}.xml'.format(swath)))
         secondary = ut.loadProduct( os.path.join(inps.secondary , 'IW{0}.xml'.format(swath)))
@@ -176,25 +144,25 @@ def main(iargs=None):
         offdir = os.path.join(inps.coreg,'IW{0}'.format(swath))
         os.makedirs(outdir, exist_ok=True)
 
-    
+
         ####Indices w.r.t reference
         burstoffset, minBurst, maxBurst = reference.getCommonBurstLimits(secondary)
         secondaryBurstStart = minBurst +  burstoffset
         secondaryBurstEnd = maxBurst
-    
+
         relShifts = ut.getRelativeShifts(reference, secondary, minBurst, maxBurst, secondaryBurstStart)
 
         print('Shifts: ', relShifts)
-    
+
         ####Can corporate known misregistration here
-    
+
         apoly = Poly2D()
         apoly.initPoly(rangeOrder=0,azimuthOrder=0,coeffs=[[0.]])
-    
+
         rpoly = Poly2D()
         rpoly.initPoly(rangeOrder=0,azimuthOrder=0,coeffs=[[0.]])
 
-    
+
         #slvCoreg = createTOPSSwathSLCProduct()
         slvCoreg = ut.coregSwathSLCProduct()
         slvCoreg.configure()
@@ -202,7 +170,7 @@ def main(iargs=None):
 
         for ii in range(minBurst, maxBurst):
 
-            outname = os.path.join(outdir, 'burst_%02d.slc'%(ii+1))  
+            outname = os.path.join(outdir, 'burst_%02d.slc'%(ii+1))
             outnameLower = os.path.splitext(outname)[0]+'_lower.slc'
             outnameUpper = os.path.splitext(outname)[0]+'_upper.slc'
             if os.path.exists(outnameLower) and os.path.exists(outnameLower+'.vrt') and os.path.exists(outnameLower+'.xml') and \
@@ -221,7 +189,7 @@ def main(iargs=None):
             except:
                 raise Exception('Trying to access shift for secondary burst index {0}, which may not overlap with reference'.format(jj))
 
-        
+
             ####Setup initial polynomials
             ### If no misregs are given, these are zero
             ### If provided, can be used for resampling without running to geo2rdr again for fast results
@@ -229,14 +197,14 @@ def main(iargs=None):
                  'rgpoly' : rpoly,
                   'rangeOff' : os.path.join(offdir, 'range_%02d.off'%(ii+1)),
                   'azimuthOff': os.path.join(offdir, 'azimuth_%02d.off'%(ii+1))}
-                 
+
 
             ###For future - should account for azimuth and range misreg here .. ignoring for now.
             azCarrPoly, dpoly = secondary.estimateAzimuthCarrierPolynomials(slvBurst, offset = -1.0 * offset)
-    
+
             rdict['carrPoly'] = azCarrPoly
             rdict['doppPoly'] = dpoly
-    
+
 
             #subband filtering
             from Stack import ionParam
@@ -278,7 +246,7 @@ def main(iargs=None):
 #########################################################################################################################################
         #     minAz, maxAz, minRg, maxRg = ut.getValidLines(slvBurst, rdict, outname,
         #         misreg_az = misreg_az - offset, misreg_rng = misreg_rg)
-            
+
 
         #     copyBurst = copy.deepcopy(masBurst)
         #     ut.adjustValidSampleLine_V2(copyBurst, slvBurst, minAz=minAz, maxAz=maxAz,
@@ -287,11 +255,11 @@ def main(iargs=None):
         #     print('After: ', copyBurst.firstValidLine, copyBurst.numValidLines)
         #     slvCoreg.bursts.append(copyBurst)
 
- 
+
         # slvCoreg.numberOfBursts = len(slvCoreg.bursts)
         # slvCoreg.source = ut.asBaseClass(secondary)
         # slvCoreg.reference = reference
-        # ut.saveProduct(slvCoreg, outdir + '.xml')    
+        # ut.saveProduct(slvCoreg, outdir + '.xml')
 
 if __name__ == '__main__':
     '''
