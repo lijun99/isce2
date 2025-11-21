@@ -72,6 +72,7 @@ def resampSecondaryCPU(reference, secondary, rdict, outname, flatten=True):
     rObj.resamp_slc(imageOut=imgOut)
 
     imgOut.renderHdr()
+    imgOut.renderVRT()
     return imgOut
 
 def convertPoly2D(poly):
@@ -185,6 +186,7 @@ def resampSecondaryGPU(reference, secondary, rdict, outname, flatten=True):
     aziImg.finalizeImage()
 
     imgOut.renderHdr()
+    imgOut.renderVRT()
     return imgOut
 
 def getRelativeShifts(referenceFrame, secondaryFrame, minBurst, maxBurst, secondaryBurstStart):

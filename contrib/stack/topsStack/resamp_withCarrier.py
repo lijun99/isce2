@@ -45,65 +45,15 @@ def createParser():
     parser.add_argument('-d', '--overlapDir', dest='overlapDir', type=str, default='overlap',
             help='reference overlap directory')
 
+    parser.add_argument('-useGPU', '--useGPU', dest='useGPU',action='store_true', default=False,
+            help='Allow App to use GPU when available')
+
     return parser
 
 
 def cmdLineParse(iargs = None):
     parser = createParser()
     return parser.parse_args(args=iargs)
-
-
-def resampSecondary(ref, sec, rdict, outname, flatten):
-    '''
-    Resample burst by burst.
-    '''
-
-    azpoly = rdict['azpoly']
-    rgpoly = rdict['rgpoly']
-    azcarrpoly = rdict['carrPoly']
-    dpoly = rdict['doppPoly']
-
-    rngImg = isceobj.createImage()
-    rngImg.load(rdict['rangeOff'] + '.xml')
-    rngImg.setAccessMode('READ')
-
-    aziImg = isceobj.createImage()
-    aziImg.load(rdict['azimuthOff'] + '.xml')
-    aziImg.setAccessMode('READ')
-
-    inimg = isceobj.createSlcImage()
-    inimg.load(sec.image.filename + '.xml')
-    inimg.setAccessMode('READ')
-
-
-    rObj = stdproc.createResamp_slc()
-    rObj.slantRangePixelSpacing = sec.rangePixelSize
-    rObj.radarWavelength = sec.radarWavelength
-    rObj.azimuthCarrierPoly = azcarrpoly
-    rObj.dopplerPoly = dpoly
-
-    rObj.azimuthOffsetsPoly = azpoly
-    rObj.rangeOffsetsPoly = rgpoly
-    rObj.imageIn = inimg
-
-    width = ref.numberOfSamples
-    length = ref.numberOfLines
-    imgOut = isceobj.createSlcImage()
-    imgOut.setWidth(width)
-    imgOut.filename = outname
-    imgOut.setAccessMode('write')
-
-    rObj.outputWidth = width
-    rObj.outputLines = length
-    rObj.residualRangeImage = rngImg
-    rObj.residualAzimuthImage = aziImg
-    rObj.flatten = flatten
-    print(rObj.flatten)
-    rObj.resamp_slc(imageOut=imgOut)
-
-    imgOut.renderHdr()
-    imgOut.renderVRT()
-    return imgOut
 
 
 def main(iargs=None):
@@ -114,6 +64,23 @@ def main(iargs=None):
     referenceSwathList = ut.getSwathList(inps.reference)
     secondarySwathList = ut.getSwathList(inps.secondary)
     swathList = list(sorted(set(referenceSwathList + secondarySwathList)))
+
+    # decide whether to use GPU
+    run_GPU = False
+    if inps.useGPU:
+        try:
+            from zerodop.GPUresampslc.GPUresampslc import PyResampSlc
+            run_GPU = True
+        except:
+            print("GPU resampling module not found. Using CPU instead.")
+            pass
+
+    if run_GPU:
+        from isceobj.TopsProc.runFineResamp import resampSecondaryGPU as resampSecondary
+        print("Using GPU for fine resampling")
+    else:
+        from isceobj.TopsProc.runFineResamp import resampSecondaryCPU as resampSecondary
+        print("Using CPU for fine resampling")
 
     for swath in swathList:
 
@@ -143,7 +110,7 @@ def main(iargs=None):
         ###Output directory for coregistered SLCs
         if not inps.overlap:
             outdir = os.path.join(inps.coreg,'IW{0}'.format(swath))
-            offdir = os.path.join(inps.coreg,'IW{0}'.format(swath)) 
+            offdir = os.path.join(inps.coreg,'IW{0}'.format(swath))
         else:
             outdir = os.path.join(inps.coreg, inps.overlapDir, 'IW{0}'.format(swath))
             offdir = os.path.join(inps.coreg, inps.overlapDir, 'IW{0}'.format(swath))
@@ -217,7 +184,7 @@ def main(iargs=None):
 
                 copyBurst = copy.deepcopy(topBurst)
                 ut.adjustValidSampleLine(copyBurst)
-                copyBurst.image.filename = outimg.filename 
+                copyBurst.image.filename = outimg.filename
                 print('After: ', copyBurst.firstValidLine, copyBurst.numValidLines)
                 topCoreg.bursts.append(copyBurst)
                 #######################################################
@@ -248,7 +215,7 @@ def main(iargs=None):
                #######################################################
 
             else:
-                outname = os.path.join(outdir, 'burst_%02d.slc'%(ii+1))  
+                outname = os.path.join(outdir, 'burst_%02d.slc'%(ii+1))
 
                 ####Setup initial polynomials
                 ### If no misregs are given, these are zero
@@ -276,7 +243,7 @@ def main(iargs=None):
                 topCoreg.bursts.append(copyBurst)
 
 
-        ####################################################### 
+        #######################################################
         topCoreg.numberOfBursts = len(topCoreg.bursts)
         topCoreg.source = ut.asBaseClass(secondary)
 
@@ -290,7 +257,7 @@ def main(iargs=None):
 
         else:
             topCoreg.reference = reference
-            ut.saveProduct(topCoreg, outdir + '.xml')    
+            ut.saveProduct(topCoreg, outdir + '.xml')
 
 
 if __name__ == '__main__':
