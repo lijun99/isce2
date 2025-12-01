@@ -255,7 +255,7 @@ void runGPUResamp(double *h_inpts_dbl, int *h_inpts_int, void *imgIn, void *imgO
     printf("    Allocating initial memory... ");
     fflush(stdout);
 
-    int nInPix = h_inpts_int[5] * h_inpts_int[1];
+    int nInPix = h_inpts_int[0] * h_inpts_int[1];
     int nOutPix = h_inpts_int[6] * h_inpts_int[2];
     int nResidAzPix = 0;
     if (residAz != 0) nResidAzPix = h_inpts_int[6] * h_inpts_int[2];

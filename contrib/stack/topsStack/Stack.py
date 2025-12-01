@@ -106,10 +106,15 @@ class config(object):
        #self.f.write('interferogram_prefix :' + self.interferogram_prefix + '\n')
         self.f.write('coregdir : ' + self.coregSecondaryDir + '\n')
         self.f.write('overlap : ' + self.overlapTrueOrFalse + '\n')
+        if self.useGPU:
+            self.f.write('useGPU : True \n')
+        else:
+            self.f.write('useGPU : False\n')
         if self.misreg_az is not None:
             self.f.write('azimuth_misreg : ' + self.misreg_az + '\n')
         if self.misreg_rng is not None:
             self.f.write('range_misreg : ' + self.misreg_rng + '\n')
+
 
     def generateIgram(self, function):
         self.f.write('###################################'+'\n')
