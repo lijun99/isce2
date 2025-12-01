@@ -28,6 +28,9 @@ def createParser():
     parser.add_argument('-o', '--coregdir', dest='coreg', type=str, default='coreg_secondary',
             help='Directory with coregistered SLCs and IFGs')
 
+    parser.add_argument('-useGPU', '--useGPU', dest='useGPU',action='store_true', default=False,
+            help='Allow App to use GPU when available')
+
     parser.add_argument('-a', '--azimuth_misreg', dest='misreg_az', type=str, default=0.0,
             help='File name with the azimuth misregistration')
 
@@ -43,7 +46,7 @@ def cmdLineParse(iargs = None):
     parser = createParser()
     return parser.parse_args(args=iargs)
 
-def resampSecondary(mas, slv, rdict, outname, flatten):
+def resampSecondaryCPU(mas, slv, rdict, outname, flatten):
     '''
     Resample burst by burst.
     '''
@@ -76,6 +79,12 @@ def resampSecondary(mas, slv, rdict, outname, flatten):
     rObj.rangeOffsetsPoly = rgpoly
     rObj.imageIn = inimg
 
+    ####Setting reference values
+    rObj.startingRange = sec.startingRange
+    rObj.referenceSlantRangePixelSpacing = ref.rangePixelSize
+    rObj.referenceStartingRange = ref.startingRange
+    rObj.referenceWavelength = ref.radarWavelength
+
     width = mas.numberOfSamples
     length = mas.numberOfLines
     imgOut = isceobj.createSlcImage()
@@ -90,6 +99,123 @@ def resampSecondary(mas, slv, rdict, outname, flatten):
     rObj.flatten = flatten
     print(rObj.flatten)
     rObj.resamp_slc(imageOut=imgOut)
+
+    imgOut.renderHdr()
+    imgOut.renderVRT()
+    return imgOut
+
+
+def convertPoly2D(poly):
+    '''
+    Convert a isceobj.Util.Poly2D {poly} into zerodop.GPUresampslc.GPUresampslc.PyPloy2d
+    '''
+    from zerodop.GPUresampslc.GPUresampslc import PyPoly2d
+    import itertools
+
+    # get parameters from poly
+    azimuthOrder = poly.getAzimuthOrder()
+    rangeOrder = poly.getRangeOrder()
+    azimuthMean = poly.getMeanAzimuth()
+    rangeMean = poly.getMeanRange()
+    azimuthNorm = poly.getNormAzimuth()
+    rangeNorm = poly.getNormRange()
+
+    # create the PyPoly2d object
+    pPoly = PyPoly2d(azimuthOrder, rangeOrder, azimuthMean, rangeMean, azimuthNorm, rangeNorm)
+    # copy the coeffs, need to flatten into 1d list
+    pPoly.coeffs = list(itertools.chain.from_iterable(poly.getCoeffs()))
+
+    # all done
+    return pPoly
+
+
+def resampSecondaryGPU(ref, sec, rdict, outname, flatten):
+    '''
+    Resample burst by burst with GPU
+    '''
+
+    # import the GPU module
+    import zerodop.GPUresampslc
+
+    # get Poly2D objects from rdict and convert them into PyPoly2d objects
+    azpoly = convertPoly2D(rdict['azpoly'])
+    rgpoly = convertPoly2D(rdict['rgpoly'])
+
+    azcarrpoly = convertPoly2D(rdict['carrPoly'])
+    dpoly = convertPoly2D(rdict['doppPoly'])
+
+    rngImg = isceobj.createImage()
+    rngImg.load(rdict['rangeOff'] + '.xml')
+    rngImg.setCaster('read', 'FLOAT')
+    rngImg.createImage()
+
+    aziImg = isceobj.createImage()
+    aziImg.load(rdict['azimuthOff'] + '.xml')
+    aziImg.setCaster('read', 'FLOAT')
+    aziImg.createImage()
+
+    inimg = isceobj.createSlcImage()
+    inimg.load(sec.image.filename + '.xml')
+    inimg.setAccessMode('READ')
+    inimg.createImage()
+
+    # create a GPU resample processor
+    rObj = zerodop.GPUresampslc.createResampSlc()
+
+    # set parameters
+    rObj.slr = sec.rangePixelSize
+    rObj.wvl = sec.radarWavelength
+
+    # set polynomials
+    rObj.azCarrier = azcarrpoly
+    rObj.dopplerPoly = dpoly
+    rObj.azOffsetsPoly = azpoly
+    rObj.rgOffsetsPoly = rgpoly
+    # need to create an empty rgCarrier poly
+    rgCarrier = Poly2D()
+    rgCarrier.initPoly(rangeOrder=0, azimuthOrder=0, coeffs=[[0.]])
+    rgCarrier = convertPoly2D(rgCarrier)
+    rObj.rgCarrier = rgCarrier
+
+    # input secondary image
+    rObj.slcInAccessor = inimg.getImagePointer()
+    rObj.inWidth = inimg.getWidth()
+    rObj.inLength = inimg.getLength()
+
+    ####Setting reference values
+    rObj.r0 = sec.startingRange
+    rObj.refr0 = ref.startingRange
+    rObj.refslr = ref.rangePixelSize
+    rObj.refwvl = ref.radarWavelength
+
+    # set output image
+    width = ref.numberOfSamples
+    length = ref.numberOfLines
+
+    imgOut = isceobj.createSlcImage()
+    imgOut.setWidth(width)
+    imgOut.filename = outname
+    imgOut.setAccessMode('write')
+    imgOut.createImage()
+    rObj.slcOutAccessor = imgOut.getImagePointer()
+
+    rObj.outWidth = width
+    rObj.outLength = length
+    rObj.residRgAccessor = rngImg.getImagePointer()
+    rObj.residAzAccessor = aziImg.getImagePointer()
+    rObj.flatten = flatten
+    print(rObj.flatten)
+
+    # need to specify data type, only complex is currently supported
+    rObj.isComplex = (inimg.dataType == 'CFLOAT')
+    # run resampling
+    rObj.resamp_slc()
+
+    # finalize images
+    inimg.finalizeImage()
+    imgOut.finalizeImage()
+    rngImg.finalizeImage()
+    aziImg.finalizeImage()
 
     imgOut.renderHdr()
     imgOut.renderVRT()
@@ -144,6 +270,27 @@ def main(iargs=None):
     Create coregistered overlap secondarys.
     '''
     inps = cmdLineParse(iargs)
+
+    # see if the user compiled isce with GPU enabled
+    run_GPU = False
+    try:
+        from zerodop.GPUresampslc.GPUresampslc import PyResampSlc
+        run_GPU = True
+    except:
+        pass
+
+    if inps.useGPU and not run_GPU:
+        print("GPU mode requested but no GPU ISCE code found")
+
+    # setting the respective version of resampSecondary for CPU and GPU
+    if run_GPU and inps.useGPU:
+        print('GPU mode')
+        resampSecondary = resampSecondaryGPU
+    else:
+        print('CPU mode')
+        resampSecondary = resampSecondaryCPU
+
+
     referenceSwathList = ut.getSwathList(inps.reference)
     secondarySwathList = ut.getSwathList(inps.secondary)
 

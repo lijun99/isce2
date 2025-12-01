@@ -272,6 +272,10 @@ class config(object):
         self.f.write('reference : ' + self.reference + '\n')
         self.f.write('secondary : ' + self.secondary + '\n')
         self.f.write('coregdir : ' + self.coregdir + '\n')
+        if self.useGPU:
+            self.f.write('useGPU : True \n')
+        else:
+            self.f.write('useGPU : False\n')
         self.f.write('azimuth_misreg : ' + self.azimuth_misreg + '\n')
         self.f.write('range_misreg : ' + self.range_misreg + '\n')
 
