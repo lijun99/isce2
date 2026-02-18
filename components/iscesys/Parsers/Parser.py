@@ -2,19 +2,19 @@
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Copyright 2009 California Institute of Technology. ALL RIGHTS RESERVED.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 # http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# 
+#
 # United States Government Sponsorship acknowledged. This software is subject to
 # U.S. export control laws and regulations and has been classified as 'EAR99 NLR'
 # (No [Export] License Required except when exporting to an embargoed country,
@@ -35,7 +35,7 @@ import logging
 import os
 const_key = '__const__'
 const_name = 'constant'
-const_marker = '\$'  #\ required to escape special character for re
+const_marker = r'\$'  #\ required to escape special character for re
 
 class Parser(object):
     """Parser
@@ -383,6 +383,7 @@ class Parser(object):
             units = self.getPropertyElement(node, 'units')
             doc = self.getPropertyElement(node, 'doc')
             value = self.checkException(name,value)
+            value = self.sanitizeNumpyScalarText(value)
             #Try to update the input dictionary
             if self.isStr(value): # it is actually a string
                 dictIn.update({name:value})
@@ -391,14 +392,14 @@ class Parser(object):
                     dictIn.update({name:eval(value)})
                 except:
                     pass
-            if units and (not dictMisc is None):              
-                if units:                
+            if units and (not dictMisc is None):
+                if units:
                     if not name in dictMisc:#create the node
                         dictMisc.update({name:{'units':units}})
                     else:
                         dictMisc[name].update({'units':units})
             if doc and (not dictMisc == None):
-               
+
                 if not name in dictMisc:#create the node
                     dictMisc.update({name:{'doc':doc}})
                 else:
@@ -411,6 +412,26 @@ class Parser(object):
             return value.upper()
         else:
             return value
+
+    def sanitizeNumpyScalarText(self, value):
+        """
+        Convert textual numpy scalar wrappers (e.g. np.float64(1.2), np.int(3))
+        into plain literals so XML values remain parseable without numpy in scope.
+        """
+        if not isinstance(value, str):
+            return value
+
+        import re
+        pattern = r'\b(?:np|numpy)\.(?:int|int_|intc|intp|int8|int16|int32|int64|longlong|'
+        pattern += r'uint8|uint16|uint32|uint64|float|float_|float16|float32|float64|double|'
+        pattern += r'longdouble)\(\s*([^()]+?)\s*\)'
+
+        prev = None
+        while value != prev:
+            prev = value
+            value = re.sub(pattern, r'\1', value)
+
+        return value
 
 
 
