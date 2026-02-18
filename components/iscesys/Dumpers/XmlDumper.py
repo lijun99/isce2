@@ -42,6 +42,26 @@ import xml.etree.ElementTree as ET
 from iscesys.DictUtils.DictUtils import DictUtils as DU
 import logging
 class XmlDumper:
+    def _toBuiltin(self, value):
+        """
+        Convert numpy scalar/array values to Python built-ins before writing XML.
+        This avoids serialized text like np.float64(...) or np.int64(...).
+        """
+        if self._numpy is not None:
+            if isinstance(value, self._numpy.generic):
+                return value.item()
+            if isinstance(value, self._numpy.ndarray):
+                return self._toBuiltin(value.tolist())
+
+        if isinstance(value, list):
+            return [self._toBuiltin(v) for v in value]
+        if isinstance(value, tuple):
+            return tuple(self._toBuiltin(v) for v in value)
+        if isinstance(value, dict):
+            return {k: self._toBuiltin(v) for k, v in value.items()}
+
+        return value
+
     #Not used, but needed in case we want to dump into a  separate file lists that are too big
     def getMaxLength(self,listIn,maxL):
         if(isinstance(listIn,list)):
@@ -52,11 +72,11 @@ class XmlDumper:
                 
     def addProperty(self,parent,name,value,propMisc):
         child = ET.SubElement(parent,"property",name=name)
-        ET.SubElement(child, 'value').text = str(value)
+        ET.SubElement(child, 'value').text = str(self._toBuiltin(value))
         if not propMisc == None:
             for pkey in self._propertyKeys:
                 if pkey in propMisc:
-                    ET.SubElement(child, pkey).text = str(propMisc[pkey])
+                    ET.SubElement(child, pkey).text = str(self._toBuiltin(propMisc[pkey]))
     def addComponent(self,parent,dictIn,factDict = None,miscDict = None):
         keys = sorted(dictIn.keys())
         for key in keys:
@@ -66,7 +86,7 @@ class XmlDumper:
                 child = ET.SubElement(parent,"component",name=key)
                 for ckey in self._componentKeys:
                     if ckey in comp:
-                        ET.SubElement(child,ckey).text = str(comp[ckey])
+                        ET.SubElement(child,ckey).text = str(self._toBuiltin(comp[ckey]))
                 valMisc = None
                 if (not miscDict == None) and key in miscDict:
                     valMisc = miscDict[key]
@@ -120,15 +140,29 @@ class XmlDumper:
     def __getstate__(self):
         d = dict(self.__dict__)
         del d['logger']
+        try:
+            del d['_numpy']
+        except KeyError:
+            pass
         return d
     def __setstate__(self,d):
         self.__dict__.update(d)
         self.logger = logging.getLogger('isce.iscesys.Dumpers.XmlDumper')
+        try:
+            import numpy as np
+            self._numpy = np
+        except Exception:
+            self._numpy = None
     def __init__(self):
         self._filetypes = ['xml'] # add all the types here
         self.logger = logging.getLogger('isce.iscesys.Dumpers.XmlDumper')
         self._componentKeys = ['factorymodule','factoryname','args','kwargs','doc']
         self._propertyKeys = ['doc','units']
+        try:
+            import numpy as np
+            self._numpy = np
+        except Exception:
+            self._numpy = None
 
 def main(argv):
     from iscesys.Parsers.Parser import Parser
