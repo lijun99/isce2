@@ -37,6 +37,7 @@ import isce
 import zipfile
 import os
 import sys
+import subprocess
 from isce import logging
 from iscesys.Component.Component import Component
 import shutil
@@ -91,6 +92,47 @@ PROCEED_IF_NO_SERVER = Component.Parameter(
 # \c NOTE: the latitudes and the longitudes that describe the DEMs refer to the bottom left corner of the image.
 class DataRetriever(Component):
 
+    def _getRemoteFileCandidates(self, fileNow):
+        candidates = [fileNow]
+        if ('lp-prod-protected/SRTMGL' in self._url) and fileNow.endswith('.zip'):
+            granule = fileNow[:-len('.zip')]
+            candidates.append(os.path.join(granule, fileNow))
+        return candidates
+
+    def _probeHttpStatus(self, url):
+        """
+        Probe final HTTP status for URL after redirects.
+        Returns integer HTTP status code when available, otherwise None.
+        """
+        cookiefile = os.path.join(os.environ.get('HOME', ''), '.earthdatacookie')
+        command = [
+            'curl', '-sS', '-L', '-k',
+            '-b', cookiefile, '-c', cookiefile,
+            '-o', '/dev/null', '-w', '%{http_code}'
+        ]
+        if self._un is None or self._pw is None:
+            command.append('-n')
+        else:
+            command.extend(['-u', self._un + ':' + self._pw])
+        command.append(url)
+
+        try:
+            result = subprocess.run(
+                command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                check=False
+            )
+        except Exception:
+            return None
+
+        status = result.stdout.strip()
+        if len(status) >= 3 and status[-3:].isdigit():
+            return int(status[-3:])
+
+        return None
+
     def serverUp(self,url,needCredentials=False):
         urlp = urlparse(url)
         server = urlp.scheme + "://" + urlp.netloc
@@ -134,16 +176,17 @@ class DataRetriever(Component):
         os.chdir(self._downloadDir)
         for fileNow in listFile:
             reason = 'file'
+            httpStatus = None
             for i in range(self._numTrials):
                 try:
                     if not os.path.exists(fileNow):
+                        remoteCandidates = self._getRemoteFileCandidates(fileNow)
                         if(self._un is None or self._pw is None):
                             if not self.serverUp(self._url):
                                 reason = 'server'
                                 raise Exception
                             if os.path.exists(os.path.join(os.environ['HOME'],'.netrc')):
-                                command = 'curl -n  -L -c $HOME/.earthdatacookie -b $HOME/.earthdatacookie -k -f -O ' + os.path.join(self._url,fileNow)
-                                print("command = {}".format(command))
+                                curlPrefix = 'curl -n  -L -c $HOME/.earthdatacookie -b $HOME/.earthdatacookie -k -f -O '
                             else:
                                 self.logger.error('Please create a .netrc file in your home directory containing\nmachine urs.earthdata.nasa.gov\n\tlogin yourusername\n\tpassword yourpassword')
                                 sys.exit(1)
@@ -152,13 +195,42 @@ class DataRetriever(Component):
                             if not self.serverUp(self._url,True):
                                 reason = 'server'
                                 raise Exception
-                            command = 'curl -k -f -u ' + self._un + ':' + self._pw + ' -O ' + os.path.join(self._url,fileNow)
-                        if os.system(command):
+                            curlPrefix = 'curl -k -f -u ' + self._un + ':' + self._pw + ' -O '
+
+                        downloadSucceeded = False
+                        for remoteFile in remoteCandidates:
+                            fullUrl = os.path.join(self._url, remoteFile)
+                            command = curlPrefix + fullUrl
+                            print("command = {}".format(command))
+                            if not os.system(command):
+                                downloadSucceeded = True
+                                break
+                            httpStatus = self._probeHttpStatus(fullUrl)
+                            # Retry alternate candidate when first URL is 404.
+                            if httpStatus != 404:
+                                break
+
+                        if not downloadSucceeded:
+                            if httpStatus in [401,403]:
+                                reason = 'auth'
+                            elif httpStatus == 404:
+                                reason = 'file'
+                            elif (httpStatus is None) or (httpStatus >= 500) or (httpStatus in [408,429]):
+                                reason = 'server'
+                            else:
+                                reason = 'file'
                             raise Exception
                     self._downloadReport[fileNow] = self._succeded
                     break
                 except Exception as e:
-                    if reason == 'file':
+                    if reason == 'auth':
+                        if httpStatus is None:
+                            self.logger.error('There was a problem in retrieving the file  %s. Authorization failed. Check Earthdata credentials in your .netrc file.'%(os.path.join(self._url,fileNow)))
+                        else:
+                            self.logger.error('There was a problem in retrieving the file  %s. Authorization failed with HTTP status %d. Check Earthdata credentials in your .netrc file.'%(os.path.join(self._url,fileNow),httpStatus))
+                        self._downloadReport[fileNow] = self._failed
+                        break
+                    elif reason == 'file':
                         self.logger.warning('There was a problem in retrieving the file  %s. Requested file seems not present on server.'%(os.path.join(self._url,fileNow)))
                         #if the problem is file missing break the loop that tries when the server is down
                         self._downloadReport[fileNow] = self._failed

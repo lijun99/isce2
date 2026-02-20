@@ -44,12 +44,12 @@ from iscesys.Component.Component import Component
 from contrib.demUtils.DemStitcher import DemStitcher as DS
 #Parameters definitions
 URL1 = Component.Parameter('_url1',
-    public_name = 'URL1',default = 'https://e4ftl01.cr.usgs.gov/MEASURES/SRTMGL1.003/2000.02.11',
+    public_name = 'URL1',default = 'https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/SRTMGL1.003',
     type = str,
     mandatory = False,
     doc = "Url for the high resolution DEM. Used for SRTM version3")
 URL3 = Component.Parameter('_url3',
-    public_name = 'URL3',default = 'https://e4ftl01.cr.usgs.gov/MEASURES/SRTMGL3.003/2000.02.11',
+    public_name = 'URL3',default = 'https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/SRTMGL3.003',
     type = str,
     mandatory = False,
     doc = "Url for the low resolution DEM. Used for SRTM version3")
@@ -75,6 +75,13 @@ HAS_EXTRAS = Component.Parameter('_hasExtras',
 ## This class provides a set of convenience method to retrieve and possibly combine different DEMs from  the USGS server.
 # \c NOTE: the latitudes and the longitudes that describe the DEMs refer to the bottom left corner of the image.
 class DemStitcher(DS):
+
+    def _getRemoteFileCandidates(self, url, fileNow):
+        candidates = [fileNow]
+        if ('lp-prod-protected/SRTMGL' in url) and fileNow.endswith(self._zip):
+            granule = fileNow[:-len(self._zip)]
+            candidates.append(os.path.join(granule, fileNow))
+        return candidates
 
 
     ##
@@ -146,21 +153,26 @@ class DemStitcher(DS):
             opener = urllib.request.URLopener()
             try:
                 if not os.path.exists(os.path.join(downloadDir,fileNow)):
+                        remoteCandidates = self._getRemoteFileCandidates(url, fileNow)
                         if(self._un is None or self._pw is None):
                             #opener.retrieve(url + fileNow,os.path.join(downloadDir,fileNow))
                             if os.path.exists(os.path.join(os.environ['HOME'],'.netrc')):
-                                command = 'curl -n  -L -c $HOME/.earthdatacookie -b $HOME/.earthdatacookie -k -f -O ' + os.path.join(url,fileNow)
+                                curlPrefix = 'curl -n  -L -c $HOME/.earthdatacookie -b $HOME/.earthdatacookie -k -f -O '
                             else:
                                 self.logger.error('Please create a .netrc file in your home directory containing\nmachine urs.earthdata.nasa.gov\n\tlogin yourusername\n\tpassword yourpassword')
                                 sys.exit(1)
                         else:
-                            command = 'curl -k -f -u ' + self._un + ':' + self._pw + ' -O ' + os.path.join(url,fileNow)
+                            curlPrefix = 'curl -k -f -u ' + self._un + ':' + self._pw + ' -O '
                         # curl with -O download in working dir, so save current, move to donwloadDir
                         # nd get back once download is finished
                         cwd = os.getcwd()
                         os.chdir(downloadDir)
-                        print(command)
-                        if os.system(command):
+                        for remoteFile in remoteCandidates:
+                            command = curlPrefix + os.path.join(url,remoteFile)
+                            print(command)
+                            if not os.system(command):
+                                break
+                        else:
                             os.chdir(cwd)
                             raise Exception
                         os.chdir(cwd)

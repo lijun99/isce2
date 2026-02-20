@@ -34,7 +34,7 @@ def runDownloadDem(self):
         os.makedirs(demDir, exist_ok=True)
         os.chdir(demDir)
 
-        # downloadUrl = 'http://e4ftl01.cr.usgs.gov/MEASURES/SRTMGL1.003/2000.02.11'
+        # downloadUrl = 'https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/SRTMGL1.003'
         # cmd = 'dem.py -a stitch -b {} -k -s 1 -c -f -u {}'.format(
         #        bboxStr,
         #        downloadUrl
@@ -62,7 +62,7 @@ def runDownloadDem(self):
         os.makedirs(demGeoDir, exist_ok=True)
         os.chdir(demGeoDir)
 
-        # downloadUrl = 'http://e4ftl01.cr.usgs.gov/MEASURES/SRTMGL3.003/2000.02.11'
+        # downloadUrl = 'https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/SRTMGL3.003'
         # cmd = 'dem.py -a stitch -b {} -k -s 3 -c -f -u {}'.format(
         #        bboxStr,
         #        downloadUrl
@@ -132,9 +132,9 @@ def downloadDem(bbox, demType='version3', resolution=1, fillingValue=-32768, out
 
     if demType == 'version3':
         if resolution == 1:
-            ds._url1 = 'https://e4ftl01.cr.usgs.gov/MEASURES/SRTMGL1.003/2000.02.11'
+            ds._url1 = 'https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/SRTMGL1.003'
         else:
-            ds._url3 = 'https://e4ftl01.cr.usgs.gov/MEASURES/SRTMGL3.003/2000.02.11'
+            ds._url3 = 'https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/SRTMGL3.003'
     elif demType == 'nasadem':
         resolution = 1
         #this url is included in the module

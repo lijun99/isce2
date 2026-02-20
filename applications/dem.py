@@ -45,7 +45,7 @@ def main():
     epilog = 'Usage examples:\n\n'
     epilog += 'Stitch (-a stitch) 1 arcsec dems (-s 1) in the bounding region 31 33 -114 -112 using the url (-u) and the log in credentials provided (-n,-w).\n'
     epilog += 'Create a rsc metadata file (-m) and report the download results (-r)\n'
-    epilog += 'dem.py -a stitch -b 31 33 -114 -112 -s 1 -m rsc -r -n your_username -w your_password  -u https://aria-alt-dav.jpl.nasa.gov/repository/products/SRTM1_v3/ \n\n'
+    epilog += 'dem.py -a stitch -b 31 33 -114 -112 -s 1 -m rsc -r -n your_username -w your_password  -u https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/SRTMGL1.003 \n\n'
     epilog += 'Download (-a download) the 3 arcsec (-s 3) whose lat/lon are 31 -114 and 31 -115 (-p)\n'
     epilog += 'dem.py -a download -p 31 -114 31 -115 -s 3 \n\n'
     epilog += 'Stitch the requested files and apply EGM96 -> WGS84 correction (-c)\n'

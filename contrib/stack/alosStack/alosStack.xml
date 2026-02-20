@@ -86,7 +86,7 @@ IEEE Transactions on Geoscience and Remote Sensing, vol. 56, no. 8, pp. 4492-450
     #3 arcsec for geocoding
     mkdir dem_3_arcsec
     cd dem_3_arcsec
-    dem.py -a stitch -b 29 37 125 133 -k -s 3 -c -f -u https://e4ftl01.cr.usgs.gov/MEASURES/SRTMGL3.003/2000.02.11
+    dem.py -a stitch -b 29 37 125 133 -k -s 3 -c -f -u https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/SRTMGL3.003
     fixImageXml.py -i demLat_*_*_Lon_*_*.dem.wgs84 -f
     rm *.hgt *.log demLat_*_*_Lon_*_*.dem demLat_*_*_Lon_*_*.dem.vrt demLat_*_*_Lon_*_*.dem.xml
     cd ../
@@ -94,7 +94,7 @@ IEEE Transactions on Geoscience and Remote Sensing, vol. 56, no. 8, pp. 4492-450
     #1 arcsec for creating differential interferogram
     mkdir dem_1_arcsec
     cd dem_1_arcsec
-    dem.py -a stitch -b 29 37 125 133 -k -s 1 -c -f -u https://e4ftl01.cr.usgs.gov/MEASURES/SRTMGL1.003/2000.02.11
+    dem.py -a stitch -b 29 37 125 133 -k -s 1 -c -f -u https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/SRTMGL1.003
     fixImageXml.py -i demLat_*_*_Lon_*_*.dem.wgs84 -f
     rm *.hgt *.log demLat_*_*_Lon_*_*.dem demLat_*_*_Lon_*_*.dem.vrt demLat_*_*_Lon_*_*.dem.xml
     cd ../
