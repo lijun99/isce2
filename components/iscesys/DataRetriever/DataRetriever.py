@@ -93,11 +93,10 @@ PROCEED_IF_NO_SERVER = Component.Parameter(
 class DataRetriever(Component):
 
     def _getRemoteFileCandidates(self, fileNow):
-        candidates = [fileNow]
         if ('lp-prod-protected/SRTMGL' in self._url) and fileNow.endswith('.zip'):
             granule = fileNow[:-len('.zip')]
-            candidates.append(os.path.join(granule, fileNow))
-        return candidates
+            return [os.path.join(granule, fileNow)]
+        return [fileNow]
 
     def _probeHttpStatus(self, url):
         """

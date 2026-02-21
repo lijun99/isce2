@@ -77,11 +77,10 @@ HAS_EXTRAS = Component.Parameter('_hasExtras',
 class DemStitcher(DS):
 
     def _getRemoteFileCandidates(self, url, fileNow):
-        candidates = [fileNow]
         if ('lp-prod-protected/SRTMGL' in url) and fileNow.endswith(self._zip):
             granule = fileNow[:-len(self._zip)]
-            candidates.append(os.path.join(granule, fileNow))
-        return candidates
+            return [os.path.join(granule, fileNow)]
+        return [fileNow]
 
 
     ##
