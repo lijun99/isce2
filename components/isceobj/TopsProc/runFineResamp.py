@@ -17,7 +17,7 @@ import logging
 
 logger = logging.getLogger('isce.topsinsar.fineresamp')
 
-def resampSecondaryCPU(reference, secondary, rdict, outname, flatten=True):
+def resampSecondaryCPU(reference, secondary, rdict, outname, flatten=False):
     '''
     Resample burst by burst.
     '''
@@ -98,7 +98,7 @@ def convertPoly2D(poly):
     # all done
     return pPoly
 
-def resampSecondaryGPU(reference, secondary, rdict, outname, flatten=True):
+def resampSecondaryGPU(reference, secondary, rdict, outname, flatten=False):
     '''
     Resample burst by burst with GPU
     '''

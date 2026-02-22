@@ -3,19 +3,19 @@
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # Copyright 2012 California Institute of Technology. ALL RIGHTS RESERVED.
-# 
+#
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
-# 
+#
 # http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# 
+#
 # United States Government Sponsorship acknowledged. This software is subject to
 # U.S. export control laws and regulations and has been classified as 'EAR99 NLR'
 # (No [Export] License Required except when exporting to an embargoed country,
@@ -432,7 +432,7 @@ USE_GPU = Application.Parameter(
 NOFLAT = Application.Parameter(
         'noflat',
         public_name='noflat',
-        default=False,
+        default=True,
         type=bool,
         mandatory=False,
         doc='Disable flattening phase during fine resampling')
