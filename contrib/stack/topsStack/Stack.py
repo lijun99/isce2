@@ -106,6 +106,10 @@ class config(object):
        #self.f.write('interferogram_prefix :' + self.interferogram_prefix + '\n')
         self.f.write('coregdir : ' + self.coregSecondaryDir + '\n')
         self.f.write('overlap : ' + self.overlapTrueOrFalse + '\n')
+        if self.useGPU:
+            self.f.write('useGPU : True \n')
+        else:
+            self.f.write('useGPU : False\n')
         if self.misreg_az is not None:
             self.f.write('azimuth_misreg : ' + self.misreg_az + '\n')
         if self.misreg_rng is not None:
@@ -418,7 +422,7 @@ class ionParamUsr(object):
         #get above parameters from usr input
         with open(self.usrInput, 'r') as f:
             lines = f.readlines()
-        
+
         for x in lines:
             x = x.strip()
             if x == '' or x.strip().startswith('#'):
@@ -490,7 +494,7 @@ class ionParamUsr(object):
         print("total number of range looks in the ionosphere processing (ION_numberRangeLooks): {}".format(self.ION_numberRangeLooks))
         print("number of azimuth looks at first stage for ionosphere phase unwrapping (ION_numberAzimuthLooks0): {}".format(self.ION_numberAzimuthLooks0))
         print("number of range looks at first stage for ionosphere phase unwrapping (ION_numberRangeLooks0): {}".format(self.ION_numberRangeLooks0))
-        
+
         print()
 
 
@@ -628,10 +632,10 @@ class ionParam(object):
         self.radarWavelengthLower = SPEED_OF_LIGHT / (SPEED_OF_LIGHT / self.radarWavelength - self.rgBandwidthForSplit / 3.0)
         self.radarWavelengthUpper = SPEED_OF_LIGHT / (SPEED_OF_LIGHT / self.radarWavelength + self.rgBandwidthForSplit / 3.0)
 
-        
+
         self.calIonWithMerged = False
         self.rampRemovel = 0
-        #update the above two parameters depending on self.safeObjFirst and self.safeObjSecondary 
+        #update the above two parameters depending on self.safeObjFirst and self.safeObjSecondary
         if (self.safeObjFirst is not None) and (self.safeObjSecondary is not None):
             #determine if calculate ionosphere using merged interferogram
             #check if already got parameters needed
@@ -703,7 +707,7 @@ class run(object):
             configObj.Sentinel1_TOPS('[Function-1]')
             configObj.topo('[Function-2]')
             configObj.finalize()
-            
+
             line_cnt += 1
             line_cnt = configObj.write_wrapper_config2run_file(configName, line_cnt)
             del configObj
@@ -1086,7 +1090,7 @@ class run(object):
 
 
             geometryList = ['lat*rdr', 'lon*rdr', 'los*rdr', 'hgt*rdr', 'shadowMask*rdr','incLocal*rdr']
-            
+
             g_line_cnt = 0
             for i in range(len(geometryList)):
                 pattern = geometryList[i]
@@ -1105,7 +1109,7 @@ class run(object):
                 configObj.stack = os.path.join(self.work_dir, 'stack')
                 configObj.mergeBurst('[Function-1]')
                 configObj.finalize()
-                
+
                 g_line_cnt += 1
                 g_line_cnt = configObj.write_wrapper_config2run_file(configName, g_line_cnt)
                 del configObj
@@ -1557,7 +1561,7 @@ class run(object):
 
         ionParamUsrObj = ionParamUsr(self.param_ion)
         ionParamUsrObj.configure()
-        
+
         ion_in = os.path.join(self.work_dir,'ion')
         ion_out = os.path.join(self.work_dir,'ion_dates')
         hgt = os.path.join(self.work_dir,'merged/geom_reference/hgt.rdr')
@@ -1600,7 +1604,7 @@ class run(object):
 
         ionParamUsrObj = ionParamUsr(self.param_ion)
         ionParamUsrObj.configure()
-        
+
         ion_in = os.path.join(self.work_dir,'ion')
         ion_out = os.path.join(self.work_dir,'ion_azshift_dates')
         hgt = os.path.join(self.work_dir,'merged/geom_reference/hgt.rdr')
