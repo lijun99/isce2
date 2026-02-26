@@ -177,6 +177,15 @@ def createParser():
     unwrap.add_argument('-rmFilter', '--rmFilter', dest='rmFilter', action='store_true', default=False,
                         help='Make an extra unwrap file in which filtering effect is removed')
 
+    # geocoding
+    geocode = parser.add_argument_group('Geocode options', 'Configurations for geocoding merged interferogram products')
+    geocode.add_argument('--geocode', dest='geocode', action='store_true', default=False,
+                         help='Enable geocoding of merged pair products after interferogram/correlation steps.')
+    geocode.add_argument('--geocode_list', dest='geocode_list', type=str, default='filt_fine.unw filt_fine.cor',
+                         help='Space-separated list of merged product filenames (within each pair directory) to geocode.')
+    geocode.add_argument('--geocode_bbox', dest='geocode_bbox', type=str, default=None,
+                         help="Optional geocode bounding box SNWE. Example: '19 20 -99.5 -98.5'. Default: auto from burst bounds.")
+
     # ionospheric correction
     iono = parser.add_argument_group('Ionosphere options', 'Configurations for ionospheric delay estimation')
     iono.add_argument('--param_ion', dest='param_ion', type=str, default=None,
@@ -755,6 +764,13 @@ def correlationStack(inps, acquisitionDates, stackReferenceDate, secondaryDates,
     runObj.filter_coherence(pairs)
     runObj.finalize()
 
+    if inps.geocode:
+        i += 1
+        runObj = run()
+        runObj.configure(inps, 'run_{:02d}_geocode'.format(i))
+        runObj.geocode_pairs(acquisitionDates, safe_dict, pairs)
+        runObj.finalize()
+
     return i
 
 
@@ -795,6 +811,13 @@ def interferogramStack(inps, acquisitionDates, stackReferenceDate, secondaryDate
     runObj.configure(inps, 'run_{:02d}_unwrap'.format(i))
     runObj.unwrap(pairs)
     runObj.finalize()
+
+    if inps.geocode:
+        i += 1
+        runObj = run()
+        runObj.configure(inps, 'run_{:02d}_geocode'.format(i))
+        runObj.geocode_pairs(acquisitionDates, safe_dict, pairs)
+        runObj.finalize()
 
     return i
 

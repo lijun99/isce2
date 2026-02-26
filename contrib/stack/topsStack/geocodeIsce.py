@@ -215,10 +215,11 @@ def main(iargs=None):
     Main driver.
     '''
     inps = cmdLineParse(iargs)
-    bbox = [float(val) for val in inps.bbox.split()] 
+    bbox = None
+    if inps.bbox is not None and inps.bbox.strip() != '':
+        bbox = [float(val) for val in inps.bbox.split()]
     runGeocode(inps, inps.prodlist, bbox, inps.demfilename, is_offset_mode=False)
 
 if __name__ == '__main__':
 
     main()
-

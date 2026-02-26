@@ -131,6 +131,19 @@ class config(object):
             self.f.write('range_misreg : ' + self.misreg_rng + '\n')
         self.f.write('###################################' + '\n')
 
+    def geocodeIsce(self, function):
+        self.f.write('###################################'+'\n')
+        self.f.write(function + '\n')
+        self.f.write('geocodeIsce : ' + '\n')
+        self.f.write('filelist : ' + self.filelist + '\n')
+        if self.geocode_bbox is not None:
+            self.f.write('bbox : ' + self.geocode_bbox + '\n')
+        self.f.write('demfilename : ' + self.dem + '\n')
+        self.f.write('reference : ' + self.referenceDir + '\n')
+        self.f.write('secondary : ' + self.secondaryDir + '\n')
+        self.f.write('numberRangeLooks : ' + str(self.rangeLooks) + '\n')
+        self.f.write('numberAzimuthLooks : ' + str(self.azimuthLooks) + '\n')
+
     def overlap_withDEM(self,function):
 
         self.f.write('###################################'+'\n')
@@ -1161,6 +1174,36 @@ class run(object):
             configObj.defoMax = defoMax
             configObj.unwMethod = self.unwMethod
             configObj.unwrap('[Function-1]')
+            configObj.finalize()
+
+            line_cnt += 1
+            line_cnt = configObj.write_wrapper_config2run_file(configName, line_cnt, self.numProcess)
+            del configObj
+
+    def geocode_pairs(self, dateList, safe_dict, pairs):
+
+        for date in dateList:
+            safe_dict[date].slc = os.path.join(self.work_dir, 'coreg_secondarys/' + date)
+        safe_dict[self.reference_date].slc = os.path.join(self.work_dir, 'reference')
+
+        line_cnt = 0
+        for pair in pairs:
+            reference = pair[0]
+            secondary = pair[1]
+            mergedDir = os.path.join(self.work_dir, 'merged/interferograms/' + reference + '_' + secondary)
+            configName = os.path.join(self.config_path, 'config_geocode_' + reference + '_' + secondary)
+            configObj = config(configName)
+            configObj.configure(self)
+
+            prodlist = [os.path.join(mergedDir, x) for x in self.geocode_list.split()]
+            configObj.filelist = ' '.join(prodlist)
+            configObj.referenceDir = safe_dict[reference].slc
+            configObj.secondaryDir = safe_dict[secondary].slc
+            configObj.dem = self.dem
+            configObj.rangeLooks = self.rangeLooks
+            configObj.azimuthLooks = self.azimuthLooks
+            configObj.geocode_bbox = self.geocode_bbox
+            configObj.geocodeIsce('[Function-1]')
             configObj.finalize()
 
             line_cnt += 1
