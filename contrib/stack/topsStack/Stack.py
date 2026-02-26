@@ -77,6 +77,10 @@ class config(object):
         self.f.write('dem : ' + self.dem + '\n')
         self.f.write('geom_referenceDir : ' + self.geom_referenceDir + '\n')
         self.f.write('numProcess : ' + str(self.numProcess4topo) + '\n')
+        if self.useGPU:
+            self.f.write('useGPU : True \n')
+        else:
+            self.f.write('useGPU : False\n')
         self.f.write('##########################' + '\n')
 
     def geo2rdr(self,function):
