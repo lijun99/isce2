@@ -93,7 +93,7 @@ PROCEED_IF_NO_SERVER = Component.Parameter(
 class DataRetriever(Component):
 
     def _getRemoteFileCandidates(self, fileNow):
-        if ('lp-prod-protected/SRTMGL' in self._url) and fileNow.endswith('.zip'):
+        if ('lp-prod-protected/' in self._url) and fileNow.endswith('.zip'):
             granule = fileNow[:-len('.zip')]
             return [os.path.join(granule, fileNow)]
         return [fileNow]

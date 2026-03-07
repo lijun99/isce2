@@ -45,7 +45,7 @@ DATA_EXT = Component.Parameter('_dataExt',
     mandatory = False,
     doc = 'Extension of the data such as .raw')
 URL = Component.Parameter('_url',
-    public_name = 'URL',default = 'https://e4ftl01.cr.usgs.gov/MEASURES/SRTMSWBD.003/2000.02.11',
+    public_name = 'URL',default = 'https://data.lpdaac.earthdatacloud.nasa.gov/lp-prod-protected/SRTMSWBD.003',
     type = str,
     mandatory = False,
     doc = "Url for the high resolution water body mask")
