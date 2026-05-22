@@ -101,6 +101,19 @@ def createParser():
              help='Allow App to use GPU when available')
 
     parser.add_argument('--summary', dest='summary', action='store_true', default=False, help='Show summary only')
+
+    geocode = parser.add_argument_group('Geocode options', 'Configurations for geocoding interferogram products')
+    geocode.add_argument('--geocode', dest='geocode', action='store_true', default=False,
+            help='Generate geocoding run file for interferogram products.')
+    geocode.add_argument('--geocode_list', dest='geocode_list', type=str,
+            default='filt_PAIR.unw filt_PAIR.cor',
+            help='Space-separated list of products to geocode. Use PAIR as a placeholder for the '
+                 'reference_secondary date pair (e.g. filt_PAIR.unw PAIR.cor). '
+                 'Default: "filt_PAIR.unw filt_PAIR.cor"')
+    geocode.add_argument('--geocode_bbox', dest='geocode_bbox', type=str, default=None,
+            help='Bounding box for geocoding in SNWE format (e.g. "33 34 -116 -115"). '
+                 'If not provided, derived automatically from geom_reference lat/lon files.')
+
     return parser
 
 
@@ -250,6 +263,14 @@ def interferogramStack(inps, acquisitionDates, stackReferenceDate, secondaryDate
     low_or_high = "/"
     runObj.igrams_network(pairs, acquisitionDates, stackReferenceDate, low_or_high, config_prefix)
     runObj.finalize()
+
+    if inps.geocode:
+        i += 1
+        runObj = run()
+        runObj.configure(inps, 'run_{:02d}_geocode'.format(i))
+        runObj.geocode_products(pairs, low_or_high)
+        runObj.finalize()
+
     return
 
 
@@ -304,6 +325,34 @@ def interferogramIonoStack(inps, acquisitionDates, stackReferenceDate, secondary
     runObj.finalize()
     return
 
+    def get_bbox_from_geometry(geom_dir):
+    """Derive SNWE bounding box from lat.rdr and lon.rdr in geom_reference directory."""
+    latFile = os.path.join(geom_dir, 'lat.rdr')
+    lonFile = os.path.join(geom_dir, 'lon.rdr')
+
+    for f in [latFile, latFile + '.xml', lonFile, lonFile + '.xml']:
+        if not os.path.exists(f):
+            return None
+
+    latImg = isceobj.createImage()
+    latImg.load(latFile + '.xml')
+    width = latImg.getWidth()
+    length = latImg.getLength()
+
+    lat = np.fromfile(latFile, dtype=np.float32).reshape(length, width)
+    lon = np.fromfile(lonFile, dtype=np.float32).reshape(length, width)
+
+    valid = lat != 0
+    lat_valid = lat[valid]
+    lon_valid = lon[valid]
+
+    S = float(lat_valid.min())
+    N = float(lat_valid.max())
+    W = float(lon_valid.min())
+    E = float(lon_valid.max())
+
+    return '{:.4f} {:.4f} {:.4f} {:.4f}'.format(S, N, W, E)
+
 
 def main(iargs=None):
 
@@ -350,6 +399,16 @@ def main(iargs=None):
     if inps.bbox:
         inps.slcDir = inps.slcDir + "_crop"
     #############################
+
+    if inps.geocode and inps.geocode_bbox is None:
+        geom_dir = os.path.join(inps.workDir, 'geom_reference')
+        inps.geocode_bbox = get_bbox_from_geometry(geom_dir)
+        if inps.geocode_bbox is None:
+            raise ValueError(
+                'Cannot determine geocode bounding box from {}. '
+                'Run the reference geometry step first (lat.rdr/lon.rdr must exist), '
+                'or provide --geocode_bbox "S N W E".'.format(geom_dir))
+        print('Geocode bounding box (SNWE) derived from geom_reference: {}'.format(inps.geocode_bbox))
 
     if inps.workflow == 'slc':
         slcStack(inps, acquisitionDates, stackReferenceDate, secondaryDates, pairs, splitFlag=False, rubberSheet=False)

@@ -664,8 +664,25 @@ class run(object):
             configObj.finalize()
             self.runf.write(self.text_cmd+'stripmapWrapper.py -c '+ configName+'\n')
 
+    def geocode_products(self, pairs, low_or_high='/'):
+        geom_dir = os.path.join(self.workDir, 'geom_reference')
+        latFile = os.path.join(geom_dir, 'lat.rdr')
+        lonFile = os.path.join(geom_dir, 'lon.rdr')
+
+        for pair in pairs:
+            pair_name = pair[0] + '_' + pair[1]
+            igram_dir = os.path.join(self.workDir, 'Igrams' + low_or_high + pair_name)
+            prodlist = [os.path.join(igram_dir, x.replace('PAIR', pair_name))
+                        for x in self.geocode_list.split()]
+            cmd = (self.text_cmd + 'geocodeGdal.py'
+                   + ' -l ' + latFile
+                   + ' -L ' + lonFile
+                   + ' -f "' + ' '.join(prodlist) + '"'
+                   + ' -b "' + self.geocode_bbox + '"')
+            self.runf.write(cmd + '\n')
+
     def finalize(self):
-        self.runf.close() 
+        self.runf.close()
         writeJobFile(self.run_outname)
 
 
