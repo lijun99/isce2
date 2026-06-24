@@ -7,7 +7,7 @@ import isce
 import isceobj
 import shelve
 import datetime
-from isceobj.Location.Offset import OffsetField
+from isceobj.Location.Offset import OffsetField, Offset
 from iscesys.StdOEL.StdOELPy import create_writer
 from mroipac.ampcor.Ampcor import Ampcor
 import pickle
@@ -131,9 +131,20 @@ def estimateOffsetField(reference, secondary, azoffset=0, rgoffset=0):
 def fitOffsets(field,azrgOrder=0,azazOrder=0,
         rgrgOrder=0,rgazOrder=0,snr=5.0):
     '''
-    Estimate constant range and azimith shifs.
+    Estimate constant range and azimuth shifts.
     '''
 
+    if len(field._offsets) == 0:
+        print('WARNING: No valid cross-correlation windows found (SNR below threshold).')
+        print('WARNING: Defaulting to zero timing corrections. '
+              'Interferogram quality may be affected.')
+        dummy = OffsetField()
+        off = Offset()
+        off.setCoordinate(1, 1)
+        off.setOffset(0.0, 0.0)
+        off.setSignalToNoise(100.0)
+        dummy.addOffset(off)
+        field = dummy
 
     stdWriter = create_writer("log","",True,filename='off.log')
 

@@ -113,8 +113,61 @@ def createParser():
     geocode.add_argument('--geocode_bbox', dest='geocode_bbox', type=str, default=None,
             help='Bounding box for geocoding in SNWE format (e.g. "33 34 -116 -115"). '
                  'If not provided, derived automatically from geom_reference lat/lon files.')
+    geocode.add_argument('--geocode_lon_step', dest='lonStep', type=float, default=None,
+            help='Geocode output longitude pixel size in degrees. '
+                 'If not provided, estimated from SLC range pixel spacing and range looks.')
+    geocode.add_argument('--geocode_lat_step', dest='latStep', type=float, default=None,
+            help='Geocode output latitude pixel size in degrees. '
+                 'If not provided, estimated from SLC azimuth pixel spacing and azimuth looks.')
 
     return parser
+
+
+def estimate_geocode_pixel_spacing(inps):
+    """Estimate geocode lon/lat pixel sizes in degrees from SLC metadata and look factors."""
+    import math
+    from isceobj.Constants import SPEED_OF_LIGHT
+
+    dates = get_dates(inps)[0]
+    ref = inps.referenceDate if inps.referenceDate in dates else dates[0]
+
+    with shelve.open(os.path.join(inps.slcDir, ref, 'data'), flag='r') as db:
+        frame = db['frame']
+
+    rsr = frame.getInstrument().rangeSamplingRate
+    slant_rps = 0.5 * SPEED_OF_LIGHT / rsr * int(inps.rlks)
+    # Convert slant range to ground range assuming ~35 deg incidence (mid-swath approx)
+    ground_rps = slant_rps / math.sin(math.radians(35))
+
+    # Platform velocity from orbit state vectors
+    svs = frame.getOrbit().stateVectors.list
+    v = svs[0].getVelocity()
+    vel = math.sqrt(v[0]**2 + v[1]**2 + v[2]**2)
+    prf = frame.PRF
+    az_ps = (vel / prf * int(inps.alks)) if prf > 0 else 2.0 * int(inps.alks)
+
+    # Scene centre latitude from first state vector
+    pos = svs[0].getPosition()
+    lat = math.degrees(math.atan2(pos[2], math.sqrt(pos[0]**2 + pos[1]**2)))
+
+    lon_step = ground_rps / (math.cos(math.radians(abs(lat))) * 111320)
+    lat_step = az_ps / 111320
+
+    # Round to 2 significant figures
+    def round2sig(x, sig=2):
+        if x == 0:
+            return 0
+        d = math.ceil(math.log10(abs(x)))
+        return round(x, -int(d) + sig)
+
+    lon_step = round2sig(lon_step)
+    lat_step = round2sig(lat_step)
+
+    print('Estimated geocode pixel spacing: lon={} deg ({:.1f} m), lat={} deg ({:.1f} m)'.format(
+        lon_step, lon_step * math.cos(math.radians(abs(lat))) * 111320,
+        lat_step, lat_step * 111320))
+
+    return lon_step, lat_step
 
 
 def cmdLineParse(iargs = None):
@@ -123,6 +176,19 @@ def cmdLineParse(iargs = None):
     inps.slcDir = os.path.abspath(inps.slcDir)
     inps.workDir = os.path.abspath(inps.workDir)
     inps.dem = os.path.abspath(inps.dem)
+
+    if inps.geocode and (inps.lonStep is None or inps.latStep is None):
+        try:
+            lon, lat = estimate_geocode_pixel_spacing(inps)
+            inps.lonStep = inps.lonStep or lon
+            inps.latStep = inps.latStep or lat
+        except Exception as e:
+            print('Warning: could not estimate geocode pixel spacing ({}). Using default 0.001 deg.'.format(e))
+            inps.lonStep = inps.lonStep or 0.001
+            inps.latStep = inps.latStep or 0.001
+    else:
+        inps.lonStep = inps.lonStep or 0.001
+        inps.latStep = inps.latStep or 0.001
 
     return inps
 
@@ -325,7 +391,8 @@ def interferogramIonoStack(inps, acquisitionDates, stackReferenceDate, secondary
     runObj.finalize()
     return
 
-    def get_bbox_from_geometry(geom_dir):
+
+def get_bbox_from_geometry(geom_dir):
     """Derive SNWE bounding box from lat.rdr and lon.rdr in geom_reference directory."""
     latFile = os.path.join(geom_dir, 'lat.rdr')
     lonFile = os.path.join(geom_dir, 'lon.rdr')
@@ -338,11 +405,12 @@ def interferogramIonoStack(inps, acquisitionDates, stackReferenceDate, secondary
     latImg.load(latFile + '.xml')
     width = latImg.getWidth()
     length = latImg.getLength()
+    dtype = latImg.toNumpyDataType()
 
-    lat = np.fromfile(latFile, dtype=np.float32).reshape(length, width)
-    lon = np.fromfile(lonFile, dtype=np.float32).reshape(length, width)
+    lat = np.fromfile(latFile, dtype=dtype).reshape(length, width)
+    lon = np.fromfile(lonFile, dtype=dtype).reshape(length, width)
 
-    valid = lat != 0
+    valid = np.isfinite(lat) & (lat != 0)
     lat_valid = lat[valid]
     lon_valid = lon[valid]
 
@@ -403,12 +471,8 @@ def main(iargs=None):
     if inps.geocode and inps.geocode_bbox is None:
         geom_dir = os.path.join(inps.workDir, 'geom_reference')
         inps.geocode_bbox = get_bbox_from_geometry(geom_dir)
-        if inps.geocode_bbox is None:
-            raise ValueError(
-                'Cannot determine geocode bounding box from {}. '
-                'Run the reference geometry step first (lat.rdr/lon.rdr must exist), '
-                'or provide --geocode_bbox "S N W E".'.format(geom_dir))
-        print('Geocode bounding box (SNWE) derived from geom_reference: {}'.format(inps.geocode_bbox))
+        if inps.geocode_bbox is not None:
+            print('Geocode bounding box (SNWE) derived from geom_reference: {}'.format(inps.geocode_bbox))
 
     if inps.workflow == 'slc':
         slcStack(inps, acquisitionDates, stackReferenceDate, secondaryDates, pairs, splitFlag=False, rubberSheet=False)

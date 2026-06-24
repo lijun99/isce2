@@ -7,6 +7,8 @@ import argparse
 import isce
 import isceobj
 import os
+import sys
+import numpy as np
 from osgeo import gdal
 import xml.etree.ElementTree as ET
 
@@ -22,8 +24,8 @@ def createParser():
             help = 'longitude file in radar coordinate')
     parser.add_argument('-f', '--filelist', dest='prodlist', type=str, required=True,
             help='Input file to be geocoded')
-    parser.add_argument('-b', '--bbox', dest='bbox', type=str, required=True,
-            help='Bounding box (SNWE)')
+    parser.add_argument('-b', '--bbox', dest='bbox', type=str, default=None,
+            help='Bounding box (SNWE); auto-derived from lat/lon files if not provided')
     parser.add_argument('-x', '--lon_step', dest='lonStep', type=str, default=0.001,
             help='output pixel size (longitude) in degrees. Default 0.001')
     parser.add_argument('-y', '--lat_step', dest='latStep', type=str, default=0.001,
@@ -45,12 +47,44 @@ def cmdLineParse(iargs = None):
     parser = createParser()
     inps =  parser.parse_args(args = iargs)
 
-    inps.bbox = [val for val in inps.bbox.split()]
-    if len(inps.bbox) != 4:
-        raise Exception('Bbox should contain 4 floating point values')
+    if inps.bbox is not None:
+        inps.bbox = [val for val in inps.bbox.split()]
+        if len(inps.bbox) != 4:
+            raise Exception('Bbox should contain 4 floating point values')
+    else:
+        inps.bbox = _bbox_from_lat_lon(inps.latFile, inps.lonFile)
 
     inps.prodlist = inps.prodlist.split()
     return inps
+
+
+def _bbox_from_lat_lon(lat_file, lon_file):
+    """Derive SNWE bbox from lat.rdr/lon.rdr at execution time."""
+    for f in [lat_file, lat_file + '.xml', lon_file, lon_file + '.xml']:
+        if not os.path.exists(f):
+            print('ERROR: {} not found.'.format(f))
+            print('The reference geometry step must complete before geocoding.')
+            print('Re-run stackStripMap.py with --geocode after the reference step,')
+            print('or provide the bounding box explicitly with --geocode_bbox "S N W E".')
+            sys.exit(1)
+
+    lat_img = isceobj.createImage()
+    lat_img.load(lat_file + '.xml')
+    width = lat_img.getWidth()
+    length = lat_img.getLength()
+    dtype = lat_img.toNumpyDataType()
+
+    lat = np.fromfile(lat_file, dtype=dtype).reshape(length, width)
+    lon = np.fromfile(lon_file, dtype=dtype).reshape(length, width)
+
+    valid = np.isfinite(lat) & (lat != 0)
+    bbox = ['{:.4f}'.format(lat[valid].min()),
+            '{:.4f}'.format(lat[valid].max()),
+            '{:.4f}'.format(lon[valid].min()),
+            '{:.4f}'.format(lon[valid].max())]
+    print('Geocode bounding box (SNWE) derived from {}: {}'.format(
+        os.path.dirname(lat_file), ' '.join(bbox)))
+    return bbox
 
 def prepare_lat_lon(inps):
 
@@ -142,10 +176,10 @@ def runGeo(inps):
        #os.system(cmd)
        writeVRT(rfile, latFile, lonFile)
 
-       cmd = 'gdalwarp -of ENVI -geoloc  -te '+ WSEN + ' -tr ' + str(inps.latStep) + ' ' + str(inps.lonStep) + ' -srcnodata 0 -dstnodata 0 ' + ' -r ' +inps.resamplingMethod +' ' + rfile +'.vrt ' + rfile + '.geo'
+       cmd = 'gdalwarp -overwrite -of ENVI -co INTERLEAVE=BIL -geoloc  -te '+ WSEN + ' -tr ' + str(inps.latStep) + ' ' + str(inps.lonStep) + ' -srcnodata 0 -dstnodata 0 ' + ' -r ' +inps.resamplingMethod +' ' + rfile +'.vrt ' + rfile + '.geo'
        print (cmd)
        os.system(cmd)
-       write_xml(rfile + '.geo')
+       write_xml(rfile + '.geo', rfile)
 
 def getSize(f):
 
@@ -167,34 +201,64 @@ def get_lat_lon(f):
     maxLat = ds.GetGeoTransform()[3]
     deltaLat = ds.GetGeoTransform()[5]
     minLat = maxLat + (b.YSize)*deltaLat
+    nbands = ds.RasterCount
+    _gdal_to_isce = {'BAND': 'BSQ', 'LINE': 'BIL', 'PIXEL': 'BIP'}
+    gdal_interleave = ds.GetMetadataItem('INTERLEAVE', 'IMAGE_STRUCTURE') or 'BAND'
+    interleave = _gdal_to_isce.get(gdal_interleave, 'BSQ')
     ds = None
-    return maxLat, deltaLat, minLon, deltaLon, width, length
+    return maxLat, deltaLat, minLon, deltaLon, width, length, nbands, interleave
 
-def write_xml(outFile): 
+_IMAGE_FACTORIES = {
+    'unw': isceobj.Image.createUnwImage,
+    'int': isceobj.createIntImage,
+    'slc': isceobj.createSlcImage,
+    'dem': isceobj.createDemImage,
+}
 
-    maxLat, deltaLat, minLon, deltaLon, width, length = get_lat_lon(outFile)
+def _load_src_meta(srcFile):
+    """Read image_type, number_bands, scheme, data_type from source XML."""
+    meta = {}
+    srcXml = srcFile + '.xml'
+    if not os.path.exists(srcXml):
+        return meta
+    tree = ET.parse(srcXml)
+    for p in tree.getroot().iter('property'):
+        v = p.find('value')
+        if v is not None:
+            meta[p.get('name')] = v.text
+    return meta
 
-    unwImage = isceobj.Image.createImage()
-    unwImage.setFilename(outFile)
-    unwImage.setWidth(width)
-    unwImage.setLength(length)
-    unwImage.bands = 1
-    unwImage.scheme = 'BIL'
-    unwImage.dataType = 'FLOAT'
-    unwImage.setAccessMode('read')
-    
-    unwImage.coord2.coordDescription = 'Latitude'
-    unwImage.coord2.coordUnits = 'degree'
-    unwImage.coord2.coordStart = maxLat 
-    unwImage.coord2.coordDelta = deltaLat 
-    unwImage.coord1.coordDescription = 'Longitude'
-    unwImage.coord1.coordUnits = 'degree'
-    unwImage.coord1.coordStart = minLon 
-    unwImage.coord1.coordDelta = deltaLon 
+def write_xml(outFile, srcFile=None):
 
-   # unwImage.createImage()
-    unwImage.renderHdr()
-    unwImage.renderVRT()
+    maxLat, deltaLat, minLon, deltaLon, width, length, nbands, interleave = get_lat_lon(outFile)
+
+    # Inherit only image_type and data_type from source XML;
+    # bands and scheme come from the actual geocoded file (gdalwarp may change interleave)
+    src = _load_src_meta(srcFile) if srcFile else {}
+    image_type = src.get('image_type')
+    src_dtype  = src.get('data_type', 'FLOAT').upper()
+
+    factory = _IMAGE_FACTORIES.get(image_type, isceobj.createImage)
+    outImage = factory()
+    outImage.setFilename(outFile)
+    outImage.setWidth(width)
+    outImage.setLength(length)
+    outImage.bands = nbands
+    outImage.scheme = interleave
+    outImage.dataType = src_dtype
+    outImage.setAccessMode('read')
+
+    outImage.coord2.coordDescription = 'Latitude'
+    outImage.coord2.coordUnits = 'degree'
+    outImage.coord2.coordStart = maxLat
+    outImage.coord2.coordDelta = deltaLat
+    outImage.coord1.coordDescription = 'Longitude'
+    outImage.coord1.coordUnits = 'degree'
+    outImage.coord1.coordStart = minLon
+    outImage.coord1.coordDelta = deltaLon
+
+    outImage.renderHdr()
+    outImage.renderVRT()
 
 def main(iargs=None):
     '''

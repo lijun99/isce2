@@ -103,8 +103,8 @@ def runGeo2rdrGPU(info,latImage, lonImage, demImage, outdir,
         grdr.setOrbitMethod(0)
 
 
-    grdr.setWidth(info.getImage().getWidth())
-    grdr.setLength(info.getImage().getLength())
+    grdr.setWidth(info.getNumberOfSamples())
+    grdr.setLength(info.getNumberOfLines())
 
     grdr.setEllipsoidMajorSemiAxis(planet.ellipsoid.a)
     grdr.setEllipsoidEccentricitySquared(planet.ellipsoid.e2)
@@ -212,8 +212,8 @@ def runGeo2rdrCPU(info, latImage, lonImage, demImage, outdir,
     grdr.prf = info.getInstrument().getPulseRepetitionFrequency()
     grdr.radarWavelength = info.getInstrument().getRadarWavelength()
     grdr.orbit = info.getOrbit()
-    grdr.width = info.getImage().getWidth()
-    grdr.length = info.getImage().getLength()
+    grdr.width = info.getNumberOfSamples()
+    grdr.length = info.getNumberOfLines()
     grdr.wireInputPort(name='planet', object=planet)
     grdr.lookSide =  info.instrument.platform.pointingDirection
 

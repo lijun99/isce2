@@ -60,9 +60,6 @@ def runTopoGPU(info, demImage, dop=None, nativedop=False, legendre=False):
     from iscesys import DateTimeUtil as DTU
     from zerodop.GPUtopozero.GPUtopozero import PyTopozero
 
-    ## TODO GPU does not support shadow and layover and local inc file generation
-    full = False
-
     os.makedirs(info.outdir, exist_ok=True)
 
     # define variables to be used later on
@@ -153,23 +150,20 @@ def runTopoGPU(info, demImage, dop=None, nativedop=False, legendre=False):
     heightImage.initImage(heightFilename,accessMode,width,dataType)
     heightImage.createImage()
 
-    # add inc and mask file if requested
-    if full:
-        incImage = isceobj.createImage()
-        dataType = 'FLOAT'
-        incImage.initImage(incFilename,accessMode,width,dataType,bands=bands,scheme=scheme)
-        incImage.createImage()
-        incImagePtr = incImage.getImagePointer()
+    # inc file
+    incImage = isceobj.createImage()
+    dataType = 'FLOAT'
+    incImage.initImage(incFilename,accessMode,width,dataType,bands=bands,scheme=scheme)
+    incImage.createImage()
+    incImagePtr = incImage.getImagePointer()
 
-        maskImage = isceobj.createImage()
-        dataType = 'BYTE'
-        bands = 1
-        maskImage.initImage(maskFilename,accessMode,width,dataType,bands=bands,scheme=scheme)
-        maskImage.createImage()
-        maskImagePtr = maskImage.getImagePointer()
-    else:
-        incImagePtr = 0
-        maskImagePtr = 0
+    # mask file
+    maskImage = isceobj.createImage()
+    dataType = 'BYTE'
+    bands = 1
+    maskImage.initImage(maskFilename,accessMode,width,dataType,bands=bands,scheme=scheme)
+    maskImage.createImage()
+    maskImagePtr = maskImage.getImagePointer()
 
     # initalize planet
     elp = Planet(pname='Earth').ellipsoid
@@ -256,26 +250,29 @@ def runTopoGPU(info, demImage, dop=None, nativedop=False, legendre=False):
     # dem/ height file
     demImage.finalizeImage()
 
-    # adding in additional files if requested
-    if full:
-        descr = '''Two channel angle file.
-                Channel 1: Angle between ray to target and the vertical at the sensor
-                Channel 2: Local incidence angle accounting for DEM slope at target'''
-
-        incImage.addDescription(descr)
-        incImage.finalizeImage()
+    incImage.finalizeImage()
+    if os.path.getsize(incFilename) > 0:
         incImage.renderHdr()
+    else:
+        for ext in ['', '.xml', '.vrt']:
+            p = incFilename + ext
+            if os.path.exists(p):
+                os.remove(p)
 
-        descr = 'Radar shadow-layover mask. 1 - Radar Shadow. 2 - Radar Layover. 3 - Both.'
-        maskImage.addDescription(descr)
-        maskImage.finalizeImage()
+    maskImage.finalizeImage()
+    if os.path.getsize(maskFilename) > 0:
         maskImage.renderHdr()
+    else:
+        for ext in ['', '.xml', '.vrt']:
+            p = maskFilename + ext
+            if os.path.exists(p):
+                os.remove(p)
 
-        if slantRangeImage:
-            try:
-                slantRangeImage.finalizeImage()
-            except:
-                pass
+    if slantRangeImage:
+        try:
+            slantRangeImage.finalizeImage()
+        except:
+            pass
 
 
 def runTopoCPU(info, demImage, dop=None,

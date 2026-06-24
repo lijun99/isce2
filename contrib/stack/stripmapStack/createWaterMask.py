@@ -74,8 +74,8 @@ def dem2bbox(dem_file):
     W = demImage.getFirstLongitude()
     S = N + demImage.getDeltaLatitude() * demImage.getLength()
     E = W + demImage.getDeltaLongitude() * demImage.getWidth()
-    bbox = [np.floor(S).astype(int), np.ceil(N).astype(int),
-            np.floor(W).astype(int), np.ceil(E).astype(int)]
+    bbox = [int(np.floor(S)), int(np.ceil(N)),
+            int(np.floor(W)), int(np.ceil(E))]
     return bbox
 
 

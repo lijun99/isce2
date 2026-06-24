@@ -6,6 +6,7 @@ import glob
 import argparse
 import shelve
 import isce
+import isceobj
 from isceobj.Sensor import createSensor
 from isceobj.Util import Poly1D
 from isceobj.Planet.AstronomicalHandbook import Const
@@ -42,6 +43,18 @@ def unpack(metaFile, slcDir, dopFile, stackSegment, parse=False):
 
     if not os.path.isdir(slcDir):
         os.mkdir(slcDir)
+
+    # populate frame image with the local SLC filename
+    # slcDir is named by date (e.g. SLC/20100115), so the SLC is {date}.slc
+    date = os.path.basename(slcDir)
+    slcname = os.path.join(slcDir, date + '.slc')
+    slcImage = isceobj.createSlcImage()
+    slcImage.setFilename(slcname)
+    slcImage.setXmin(0)
+    slcImage.setXmax(obj.frame.getNumberOfSamples())
+    slcImage.setWidth(obj.frame.getNumberOfSamples())
+    slcImage.setAccessMode('r')
+    obj.frame.setImage(slcImage)
 
     pickName = os.path.join(slcDir, 'data')
     with shelve.open(pickName) as db:

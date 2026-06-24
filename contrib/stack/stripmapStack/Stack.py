@@ -669,16 +669,25 @@ class run(object):
         latFile = os.path.join(geom_dir, 'lat.rdr')
         lonFile = os.path.join(geom_dir, 'lon.rdr')
 
+        # Replace the generic .unw placeholder with the method-specific filename
+        unw_name = 'filt_PAIR_{}.unw'.format(self.unwMethod) if self.unwMethod.lower() != 'no' else None
+        geocode_list = self.geocode_list
+        if unw_name is not None:
+            geocode_list = geocode_list.replace('filt_PAIR.unw', unw_name)
+
         for pair in pairs:
             pair_name = pair[0] + '_' + pair[1]
             igram_dir = os.path.join(self.workDir, 'Igrams' + low_or_high + pair_name)
             prodlist = [os.path.join(igram_dir, x.replace('PAIR', pair_name))
-                        for x in self.geocode_list.split()]
+                        for x in geocode_list.split()]
             cmd = (self.text_cmd + 'geocodeGdal.py'
                    + ' -l ' + latFile
                    + ' -L ' + lonFile
-                   + ' -f "' + ' '.join(prodlist) + '"'
-                   + ' -b "' + self.geocode_bbox + '"')
+                   + ' -f "' + ' '.join(prodlist) + '"')
+            if self.geocode_bbox:
+                cmd += ' -b "' + self.geocode_bbox + '"'
+            if hasattr(self, 'lonStep') and self.lonStep:
+                cmd += ' -x ' + str(self.lonStep) + ' -y ' + str(self.latStep)
             self.runf.write(cmd + '\n')
 
     def finalize(self):
